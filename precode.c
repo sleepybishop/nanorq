@@ -274,7 +274,7 @@ static bool decode_phase2(octmat *A, octmat *D, uint16_t i, uint16_t u,
 
     if (om_A(*A, row, diag) > 1) {
       uint8_t multiple = om_A(*A, row, diag);
-      oscal(om_P(*A), row, A->cols, OCTET_DIV(1, multiple)); 
+      oscal(om_P(*A), row, A->cols, OCTET_DIV(1, multiple));
       oscal(om_P(*D), row, D->cols, OCTET_DIV(1, multiple));
     }
 

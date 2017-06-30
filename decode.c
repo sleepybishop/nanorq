@@ -40,7 +40,6 @@ int main(int argc, char *argv[]) {
 
   uint8_t num_sbn = nanorq_blocks(rq);
   uint32_t fid;
-  uint32_t num_esi = nanorq_block_symbols(rq, 0);
   uint16_t packet_size = nanorq_symbol_size(rq);
   uint8_t packet[packet_size];
   uint64_t written = 0;
@@ -54,7 +53,8 @@ int main(int argc, char *argv[]) {
   }
   for (int sbn = 0; sbn < num_sbn; sbn++) {
     fprintf(stderr, "block %d is %d packets, lost %d, have %d repair\n", sbn,
-            num_esi, nanorq_num_missing(rq, sbn), nanorq_num_repair(rq, sbn));
+            nanorq_block_symbols(rq, sbn), nanorq_num_missing(rq, sbn),
+            nanorq_num_repair(rq, sbn));
     written = nanorq_decode_block(rq, myio, sbn);
     if (written == 0) {
       fprintf(stderr, "decode of sbn %d failed.\n", sbn);
