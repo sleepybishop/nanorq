@@ -248,25 +248,20 @@ static bool decode_phase1(struct pparams *prm, octmat *A, octmat *X, octmat *D,
 static bool decode_phase2(octmat *A, octmat *D, uint16_t i, uint16_t u,
                           uint16_t L) {
 
-  uint16_t row_start = i, row_end = L;
+  uint16_t row_start = i, row_end = A->rows;
   uint16_t col_start = A->cols - u;
-
-  // FIXME: identify and swap dependent rows
 
   for (uint16_t row = row_start; row < row_end; row++) {
     uint16_t row_nonzero = row;
     uint16_t diag = col_start + (row - row_start);
+    if (diag >= L) {
+      break;
+    }
     for (; row_nonzero < row_end; row_nonzero++) {
       if (om_A(*A, row_nonzero, diag) != 0) {
         break;
       }
     }
-
-    if (row_nonzero == row_end) {
-      fprintf(stderr, "FIXME: dependent row in A\n");
-      return false;
-    }
-
     if (row != row_nonzero) {
       oswaprow(om_P(*A), row, row_nonzero, A->cols);
       oswaprow(om_P(*D), row, row_nonzero, D->cols);
@@ -467,7 +462,6 @@ bool precode_matrix_decode(struct pparams *prm, octmat *X,
   if (num_repair < num_gaps)
     return false;
 
-AGAIN:
   overhead = num_repair - num_gaps;
   rep_idx = 0;
   precode_matrix_gen(prm, &A, overhead);
@@ -496,14 +490,6 @@ AGAIN:
                                                  mask, num_symbols, overhead);
   om_destroy(&A);
   om_destroy(&D);
-
-  /* FIXME
-   * ugly hack to temporarily sweep decode failures under the rug
-   */
-  if (!precode_ok && overhead > 0) {
-    num_repair--;
-    goto AGAIN;
-  }
 
   if (!precode_ok)
     return false;
