@@ -126,11 +126,9 @@ static struct source_block get_source_block(nanorq *rq, uint8_t sbn,
 
   if (sbn < rq->src_part.JL) {
     ret.sbloc = sbn * rq->src_part.IL * symbol_size;
-    return ret;
   } else if (sbn - rq->src_part.JL < rq->src_part.JS) {
     ret.sbloc = (rq->src_part.IL * rq->src_part.JL) * symbol_size +
                 (sbn - rq->src_part.JL) * rq->src_part.IS * symbol_size;
-    return ret;
   }
 
   return ret;
