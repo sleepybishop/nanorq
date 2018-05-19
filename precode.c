@@ -325,7 +325,7 @@ static void decode_phase5(octmat *A, octmat *D, uint16_t i) {
   for (uint16_t j = 0; j <= i; j++) {
     if (om_A(*A, j, j) != 1) {
       multiple = om_A(*A, j, j);
-      oscal(om_P(*A), j, A->cols, OCTET_DIV(1, multiple));
+      //oscal(om_P(*A), j, A->cols, OCTET_DIV(1, multiple));
       oscal(om_P(*D), j, D->cols, OCTET_DIV(1, multiple));
     }
     for (uint16_t l = 0; l < j; l++) {
