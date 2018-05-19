@@ -61,6 +61,9 @@ uint16_t chooser_non_zero(struct chooser *ch, octmat *A, struct graph *G,
       }
     } else {
       non_zero = non_zero_tmp;
+      if (ch->only_two_ones && non_zero == 1) {
+        ch->only_two_ones = false;
+      }
       kv_size(ch->r_rows) = 0;
       struct pair rp = {row, ones_idx[0]};
       kv_push(struct pair, ch->r_rows, rp);
@@ -68,7 +71,7 @@ uint16_t chooser_non_zero(struct chooser *ch, octmat *A, struct graph *G,
 
     if (ones == 2) {
       if (non_zero == 2) {
-        if (kv_A(ch->tracking, row).is_hdpc == 0) {
+        if (kv_A(ch->tracking, row + i).is_hdpc == 0) {
           graph_link(G, ones_idx[0], ones_idx[1]);
         }
         if (!ch->only_two_ones) {
