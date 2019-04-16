@@ -287,19 +287,17 @@ void nanorq_free(nanorq *rq) {
 
 uint64_t nanorq_oti_common(nanorq *rq) {
   uint64_t ret = 0;
-  ret = rq->common.F << 24; /* transfer length */
-  ret |= rq->common.T;      /* symbol size */
+  ret = ((uint64_t)rq->common.F) << 24; /* transfer length */
+  ret |= rq->common.T;                  /* symbol size */
 
   return ret;
 }
 
 uint32_t nanorq_oti_scheme_specific(nanorq *rq) {
   uint32_t ret = 0;
-  rq->scheme.Z %= (UINT8_MAX + 1);
-  rq->scheme.N %= (UINT16_MAX + 1);
-  ret = rq->scheme.Z << 24; /* number of source blocks */
-  ret |= rq->scheme.N << 8; /* number of sub-blocks */
-  ret |= rq->common.Al;     /* symbol alignment */
+  ret = (rq->scheme.Z % (UINT8_MAX + 1)) << 24;  /* number of source blocks */
+  ret |= (rq->scheme.N % (UINT16_MAX + 1)) << 8; /* number of sub-blocks */
+  ret |= rq->common.Al;                          /* symbol alignment */
 
   return ret;
 }
