@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "oblas.h"
 #include "chooser.h"
 
 struct chooser chooser_init(uint16_t tp_size) {
@@ -33,34 +34,30 @@ uint16_t chooser_non_zero(struct chooser *ch, octmat *A, struct graph *G,
   uint16_t non_zero = sub_cols + 1;
 
   for (uint16_t row = 0; row < sub_rows; row++) {
-    uint16_t non_zero_tmp = 0;
-    uint16_t ones = 0;
-    uint16_t ones_idx[] = {0, 0};
     bool next_row = false;
+    int nnz = 0;
+    int ones = 0;
+    int ones_idx[] = {0, 0};
 
-    for (uint16_t col = 0; col < sub_cols; col++) {
-      if ((uint8_t)(om_A(*A, row + i, col + i)) != 0) {
-        if (++non_zero_tmp > non_zero) {
-          next_row = true;
-          break;
-        }
-      }
-      if ((uint8_t)(om_A(*A, row + i, col + i)) == 1) {
-        if (++ones <= 2)
-          ones_idx[ones - 1] = col;
-      }
+    onnz(om_P(*A), row + i, i, sub_cols + i, A->cols, &nnz, &ones, ones_idx);
+
+    if (nnz > non_zero) {
+      next_row = true;
+      break;
     }
 
-    if (next_row || non_zero_tmp == 0)
+    if (next_row || nnz == 0)
       continue;
 
-    if (non_zero == non_zero_tmp) {
+    // this row has same nnz as last row
+    if (non_zero == nnz) {
       if (!ch->only_two_ones || ones == 2) {
         struct pair rp = {row, ones_idx[0]};
         kv_push(struct pair, ch->r_rows, rp);
       }
     } else {
-      non_zero = non_zero_tmp;
+      // this row has lower nnz than last row
+      non_zero = nnz;
       if (ch->only_two_ones && non_zero == 1) {
         ch->only_two_ones = false;
       }
