@@ -37,7 +37,7 @@ static bool is_prime(uint16_t n) {
 }
 
 static uint16_t deg(uint32_t v, uint16_t W) {
-  for (uint16_t d = 0; d < degree_dist_size; d++) {
+  for (int d = 0; d < degree_dist_size; d++) {
     if (v < degree_dist[d])
       return (d < (W - 2)) ? d : (W - 2);
   }
@@ -106,7 +106,7 @@ uint16_vec params_get_idxs(struct pparams *prm, uint32_t X) {
   kv_resize(uint16_t, ret, t.d + t.d1);
   kv_push(uint16_t, ret, t.b);
 
-  for (uint16_t j = 1; j < t.d; j++) {
+  for (int j = 1; j < t.d; j++) {
     t.b = (t.b + t.a) % prm->W;
     kv_push(uint16_t, ret, t.b);
   }
@@ -114,7 +114,7 @@ uint16_vec params_get_idxs(struct pparams *prm, uint32_t X) {
     t.b1 = (t.b1 + t.a1) % prm->P1;
 
   kv_push(uint16_t, ret, prm->W + t.b1);
-  for (uint16_t j = 1; j < t.d1; j++) {
+  for (int j = 1; j < t.d1; j++) {
     t.b1 = (t.b1 + t.a1) % prm->P1;
     while (t.b1 >= prm->P)
       t.b1 = (t.b1 + t.a1) % prm->P1;

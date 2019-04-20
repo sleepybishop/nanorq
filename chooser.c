@@ -33,7 +33,7 @@ uint16_t chooser_non_zero(struct chooser *ch, octmat *A, struct graph *G,
                           uint16_t i, uint16_t sub_rows, uint16_t sub_cols) {
   uint16_t non_zero = sub_cols + 1;
 
-  for (uint16_t row = 0; row < sub_rows; row++) {
+  for (int row = 0; row < sub_rows; row++) {
     bool next_row = false;
     int nnz = 0;
     int ones = 0;

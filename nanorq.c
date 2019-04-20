@@ -76,7 +76,7 @@ static struct oti_scheme gen_scheme_specific(struct oti_common *common) {
         ((size_t)common->Al * div_ceil(common->T, (size_t)(common->Al * n)));
     if (KL_max > UINT16_MAX)
       KL_max = K_max;
-    uint16_t idx;
+    int idx;
     for (idx = 0; idx < K_padded_size; idx++) {
       if (K_padded[idx] > KL_max)
         break;
@@ -189,7 +189,7 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   om_resize(&D, prm->K_padded + prm->S + prm->H,
             enc->symbol_size * rq->common.Al);
 
-  uint16_t row = 0, col = 0;
+  int row = 0, col = 0;
   for (row = 0; row < prm->S + prm->H; row++) {
     for (col = 0; col < D.cols; col++) {
       om_A(D, row, col) = 0;
@@ -200,7 +200,7 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   for (; row < prm->S + prm->H + enc->num_symbols; row++) {
     uint32_t symbol_id = row - (prm->S + prm->H);
     col = 0;
-    for (uint16_t i = 0; i < enc->symbol_size;) {
+    for (int i = 0; i < enc->symbol_size;) {
       size_t offset = get_symbol_offset(&blk, i, enc->num_symbols, symbol_id);
       uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
       uint16_t stride = sublen * rq->common.Al;
@@ -221,7 +221,7 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   }
 
   for (; row < D.rows; row++) {
-    for (uint16_t col = 0; col < D.cols; col++)
+    for (int col = 0; col < D.cols; col++)
       om_A(D, row, col) = 0;
   }
 
@@ -275,9 +275,9 @@ nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint16_t SS, uint8_t Al,
 }
 
 void nanorq_free(nanorq *rq) {
-  uint8_t num_sbn = nanorq_blocks(rq);
+  int num_sbn = nanorq_blocks(rq);
   if (rq) {
-    for (uint8_t sbn = 0; sbn < num_sbn; sbn++) {
+    for (int sbn = 0; sbn < num_sbn; sbn++) {
       nanorq_encode_cleanup(rq, sbn);
       nanorq_decode_cleanup(rq, sbn);
     }
@@ -392,7 +392,7 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
   if (esi < enc->num_symbols) {
     struct source_block blk = get_source_block(rq, sbn, enc->symbol_size);
     uint8_t *dst = ((uint8_t *)data);
-    for (uint16_t i = 0; i < enc->symbol_size;) {
+    for (int i = 0; i < enc->symbol_size;) {
       size_t offset = get_symbol_offset(&blk, i, enc->num_symbols, esi);
       uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
       uint16_t stride = sublen * rq->common.Al;
@@ -427,7 +427,7 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
     octmat tmp = precode_matrix_encode(prm, &enc->symbolmat, isi);
     uint8_t *dst = ((uint8_t *)data);
     uint8_t *octet = om_P(tmp);
-    for (uint16_t i = 0; i < enc->symbol_size; i++) {
+    for (int i = 0; i < enc->symbol_size; i++) {
       for (int byte = 0; byte < rq->common.Al; byte++) {
         *dst = (octet == NULL) ? 0 : *(octet++);
         dst++;
@@ -536,12 +536,12 @@ uint64_t nanorq_decode_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
     return 0;
   }
 
-  uint16_t max_esi = dec->symbolmat.rows;
-  uint16_t row = 0, col = 0;
+  int max_esi = dec->symbolmat.rows;
+  int row = 0, col = 0;
   struct source_block blk = get_source_block(rq, sbn, dec->symbol_size);
   for (; row < max_esi; row++) {
     col = 0;
-    for (uint16_t i = 0; i < dec->symbol_size;) {
+    for (int i = 0; i < dec->symbol_size;) {
       size_t offset = get_symbol_offset(&blk, i, max_esi, row);
       uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
       uint16_t stride = sublen * rq->common.Al;
@@ -568,7 +568,7 @@ void nanorq_decode_cleanup(nanorq *rq, uint8_t sbn) {
     struct decoder_core *dec = rq->decoders[sbn];
     om_destroy(&dec->symbolmat);
     if (kv_size(dec->repair_bin) > 0) {
-      for (uint16_t rs = 0; rs < kv_size(dec->repair_bin); rs++) {
+      for (int rs = 0; rs < kv_size(dec->repair_bin); rs++) {
         om_destroy(&(kv_A(dec->repair_bin, rs).row));
       }
       kv_destroy(dec->repair_bin);

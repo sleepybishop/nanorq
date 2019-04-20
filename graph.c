@@ -12,7 +12,7 @@ struct graph *graph_new(uint16_t size) {
   kv_init(g->edges);
   kv_resize(struct pair, g->edges, size);
 
-  for (uint16_t i = 0; i < size; i++) {
+  for (int i = 0; i < size; i++) {
     ASSIGN_PAIR(kv_A(g->edges, i), 1, i);
   }
   g->max_edges = 1;
