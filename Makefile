@@ -29,7 +29,7 @@ oblas_clean:
 	$(MAKE) -C oblas clean
 
 libnanorq.a: $(OBJ) oblas/liboblas.a
-	$(AR) rcs $@ $^ oblas/octmat.o oblas/oblas.o
+	$(AR) rcs $@ $^ oblas/octmat.o oblas/oblas.o oblas/sparsemat.o
 
 clean: oblas_clean
 	$(RM) encode decode *.o *.a
