@@ -5,8 +5,7 @@
 #include <string.h>
 
 #include <octmat.h>
-
-#include "kvec.h"
+#include <sparsemat.h>
 
 #define div_ceil(A, B) ((A) / (B) + ((A) % (B) ? 1 : 0))
 #define div_floor(A, B) ((A) / (B))
