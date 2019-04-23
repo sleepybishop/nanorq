@@ -12,8 +12,7 @@ static const uint64_t NANORQ_MAX_TRANSFER = 946270874880ULL; // ~881 GB
 typedef struct nanorq nanorq;
 
 // returns a new encoder configured with given parameters
-nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint16_t SS, uint8_t Al,
-                           size_t WS);
+nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint8_t Al);
 
 // returns success of generating symbols for a given sbn
 bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io);

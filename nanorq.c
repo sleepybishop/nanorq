@@ -6,15 +6,14 @@
 struct oti_common {
   size_t F;    /* input size in bytes */
   uint16_t T;  /* the symbol size in octets, which MUST be a multiple of Al */
-  uint16_t Al; /* byte alignment, 0 < Al <= 8, 4 is recommended */
   uint16_t SS; /* sub symbol size (multiple of alignment) */
-  size_t WS;   /* max sub block size decode */
+  uint8_t Al;  /* byte alignment, 0 < Al <= 8, 4 is recommended */
 };
 
 struct oti_scheme {
-  uint16_t Z; /* number of source blocks */
-  uint32_t N; /* number of sub-blocks in each source block */
-  size_t Kt;  /* the total number of symbols required to represent input */
+  size_t Z;  /* number of source blocks */
+  size_t N;  /* number of sub-blocks in each source block */
+  size_t Kt; /* the total number of symbols required to represent input */
 };
 
 struct partition {
@@ -70,24 +69,26 @@ static struct oti_scheme gen_scheme_specific(struct oti_common *common) {
   kv_resize(uint16_t, KL, N_max);
   memset(KL.a, 0, kv_size(KL));
 
-  for (n = 1; n <= N_max; n++) {
-    size_t KL_max =
-        (size_t)common->WS /
-        ((size_t)common->Al * div_ceil(common->T, (size_t)(common->Al * n)));
-    if (KL_max > UINT16_MAX)
-      KL_max = K_max;
-    int idx;
-    for (idx = 0; idx < K_padded_size; idx++) {
-      if (K_padded[idx] > KL_max)
-        break;
+  size_t Z_tmp;
+  size_t WS = common->T;
+  do {
+    KL.n = 0;
+    memset(KL.a, 0, kv_size(KL));
+    for (n = 1; n <= N_max; n++, WS *= 2) {
+      size_t KL_max =
+          (size_t)WS /
+          ((size_t)common->Al * div_ceil(common->T, (size_t)(common->Al * n)));
+      if (KL_max > UINT16_MAX)
+        KL_max = K_max;
+      int idx;
+      for (idx = 0; idx < K_padded_size; idx++) {
+        if (K_padded[idx] > KL_max)
+          break;
+      }
+      kv_push(uint16_t, KL, K_padded[idx == 0 ? 0 : (idx - 1)]);
     }
-    kv_push(uint16_t, KL, K_padded[idx == 0 ? 0 : (idx - 1)]);
-  }
-
-  size_t Z_tmp = (size_t)(div_ceil(ret.Kt, kv_A(KL, N_max - 1)));
-  if (Z_tmp > (UINT8_MAX + 1)) {
-    return ret;
-  }
+    Z_tmp = (size_t)(div_ceil(ret.Kt, kv_A(KL, N_max - 1)));
+  } while (Z_tmp > (UINT8_MAX + 1));
 
   ret.Z = Z_tmp;
   uint16_t tmp = (uint16_t)(div_ceil(ret.Kt, ret.Z));
@@ -235,21 +236,41 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   return true;
 }
 
-nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint16_t SS, uint8_t Al,
-                           size_t WS) {
+nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint8_t Al) {
   nanorq *rq = NULL;
 
-  if (T == 0 || Al == 0 || T < Al || T % Al != 0 || SS < Al || (SS % Al) != 0 ||
-      SS > T) {
+  uint8_t alignments[] = {1, 2, 4, 8};
+
+  if (len > NANORQ_MAX_TRANSFER) {
     return NULL;
   }
+
+  // match supported aligment
+  for (int a = sizeof(alignments) - 1; a >= 0; a--) {
+    if (Al >= alignments[a]) {
+      Al = alignments[a];
+      break;
+    }
+  }
+  if (Al == 0)
+    Al = 1;
+
+  // enforce T is multiple of aligment
+  if (T < Al) {
+    T = Al;
+  } else {
+    T -= T % Al;
+  }
+
+  // grow symbol size to minimum needed by transfer size
+  while (div_ceil(len, T) > K_max)
+    T *= Al;
 
   rq = calloc(1, sizeof(nanorq));
   rq->common.F = len;
   rq->common.T = T;
   rq->common.Al = Al;
-  rq->common.SS = SS;
-  rq->common.WS = WS;
+  rq->common.SS = T;
 
   rq->scheme = gen_scheme_specific(&rq->common);
 
@@ -263,9 +284,9 @@ nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint16_t SS, uint8_t Al,
   rq->sub_part = fill_partition(rq->common.T / rq->common.Al, rq->scheme.N);
 
 #ifdef NANORQ_DEBUG
-  fprintf(stderr, "T: %06d SS: %06d AL: %d WS: %06lu\n", T, SS, Al, WS);
-  fprintf(stderr, "Z: %06d N : %06d       Kt: %06lu\n", rq->scheme.Z,
-          rq->scheme.N, rq->scheme.Kt);
+  fprintf(stderr, "T: %06d AL: %d \n", T, Al);
+  fprintf(stderr, "Z: %06d N : %06d Kt: %06lu\n", rq->scheme.Z, rq->scheme.N,
+          rq->scheme.Kt);
 
   fprintf(stderr, "P1 %dx%d P2 %dx%d\n", rq->src_part.JL, rq->src_part.IL,
           rq->src_part.JS, rq->src_part.IS);
@@ -295,9 +316,9 @@ uint64_t nanorq_oti_common(nanorq *rq) {
 
 uint32_t nanorq_oti_scheme_specific(nanorq *rq) {
   uint32_t ret = 0;
-  ret = (rq->scheme.Z % (UINT8_MAX + 1)) << 24;  /* number of source blocks */
-  ret |= (rq->scheme.N % (UINT16_MAX + 1)) << 8; /* number of sub-blocks */
-  ret |= rq->common.Al;                          /* symbol alignment */
+  ret = rq->scheme.Z << 24; /* number of source blocks */
+  ret |= rq->scheme.N << 8; /* number of sub-blocks */
+  ret |= rq->common.Al;     /* symbol alignment */
 
   return ret;
 }
@@ -331,10 +352,8 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
   rq->common.Al = scheme & 0xff;
   rq->scheme.Kt = div_ceil(rq->common.F, rq->common.T);
 
-  if (rq->scheme.Z == 0)
-    rq->scheme.Z = (UINT8_MAX + 1);
-  if (rq->scheme.N == 0)
-    rq->scheme.N = (UINT16_MAX + 1);
+  if (rq->scheme.Z == 0 || rq->scheme.N == 0)
+    return NULL;
 
   if (rq->common.T < rq->common.Al || rq->common.T % rq->common.Al != 0 ||
       div_ceil(div_ceil(rq->common.F, rq->common.T), rq->scheme.Z) > K_max) {
@@ -346,10 +365,9 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
   rq->sub_part = fill_partition(rq->common.T / rq->common.Al, rq->scheme.N);
 
 #ifdef NANORQ_DEBUG
-  fprintf(stderr, "T: %06d SS: XXXXXX AL: %d WS: XXXXXX\n", rq->common.T,
-          rq->common.Al);
-  fprintf(stderr, "Z: %06d N : %06d       Kt: %06lu\n", rq->scheme.Z,
-          rq->scheme.N, rq->scheme.Kt);
+  fprintf(stderr, "T: %06d AL: %d \n", rq->common.T, rq->common.Al);
+  fprintf(stderr, "Z: %06d N : %06d Kt: %06lu\n", rq->scheme.Z, rq->scheme.N,
+          rq->scheme.Kt);
 
   fprintf(stderr, "P1 %dx%d P2 %dx%d\n", rq->src_part.JL, rq->src_part.IL,
           rq->src_part.JS, rq->src_part.IS);

@@ -68,13 +68,11 @@ int main(int argc, char *argv[]) {
 
   // determine chunks, symbol size, memory usage from size
   uint16_t packet_size = strtol(argv[2], NULL, 10); // T
-  uint8_t align = 4;
-  uint16_t ss = packet_size / 2;
-  uint32_t ws = packet_size * 100;
+  uint8_t align = 8;
 
   srand((unsigned int)time(0));
 
-  nanorq *rq = nanorq_encoder_new(filesize, packet_size, ss, align, ws);
+  nanorq *rq = nanorq_encoder_new(filesize, packet_size, align);
 
   if (rq == NULL) {
     fprintf(stderr, "Coud not initialize encoder.\n");
