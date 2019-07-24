@@ -7,7 +7,7 @@
 #include <nanorq.h>
 
 void usage(char *prog) {
-  fprintf(stderr, "usage:\n%s <filename> <packet_size>", prog);
+  fprintf(stderr, "usage:\n%s <filename> <packet_size>\n", prog);
   exit(1);
 }
 

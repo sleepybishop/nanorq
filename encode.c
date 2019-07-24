@@ -49,7 +49,7 @@ void dump_block(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn) {
 }
 
 void usage(char *prog) {
-  fprintf(stderr, "usage:\n%s <filename> <packet_size>", prog);
+  fprintf(stderr, "usage:\n%s <filename> <packet_size>\n", prog);
   exit(1);
 }
 
