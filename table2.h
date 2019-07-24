@@ -49,6 +49,7 @@ static const uint16_t K_padded[] = {
     48976, 49470, 49978, 50511, 51017, 51530, 52062, 52586, 53114, 53650, 54188,
     54735, 55289, 55843, 56403};
 
+static const uint16_t Z_max = 256;
 static const uint16_t K_max = 56403;
 static const uint16_t K_padded_size = sizeof(K_padded) / sizeof(K_padded[0]);
 
