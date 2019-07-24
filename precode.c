@@ -262,7 +262,10 @@ static bool decode_phase2(octmat *A, octmat *D, uint16_t i, uint16_t u,
         break;
       }
     }
-    if (row != row_nonzero) {
+
+    if (row_nonzero == row_end) {
+      return false;
+    } else if (row != row_nonzero) {
       oswaprow(om_P(*A), row, row_nonzero, A->cols);
       oswaprow(om_P(*D), row, row_nonzero, D->cols);
     }
