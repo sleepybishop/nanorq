@@ -263,7 +263,9 @@ nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint8_t Al) {
   }
 
   // grow symbol size to minimum needed by transfer size
-  while (div_ceil(len, T) > K_max)
+  // Z_max : max number of source blocks
+  // K_max : max number of symbols per source block
+  while (div_ceil(len, T) > Z_max * K_max)
     T *= Al;
 
   rq = calloc(1, sizeof(nanorq));
@@ -274,7 +276,7 @@ nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint8_t Al) {
 
   rq->scheme = gen_scheme_specific(&rq->common);
 
-  if (rq->scheme.Z == 0 || rq->scheme.N == 0 ||
+  if (rq->scheme.Z == 0 || rq->scheme.N == 0 || rq->scheme.Z >= Z_max ||
       div_ceil(rq->scheme.Kt, rq->scheme.Z) > K_max) {
     free(rq);
     return NULL;
@@ -285,8 +287,8 @@ nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint8_t Al) {
 
 #ifdef NANORQ_DEBUG
   fprintf(stderr, "T: %06d AL: %d \n", T, Al);
-  fprintf(stderr, "Z: %06d N : %06d Kt: %06lu\n", rq->scheme.Z, rq->scheme.N,
-          rq->scheme.Kt);
+  fprintf(stderr, "Z: %06d N : %06d Kt: %06d\n", (int)rq->scheme.Z,
+          (int)rq->scheme.N, (int)rq->scheme.Kt);
 
   fprintf(stderr, "P1 %dx%d P2 %dx%d\n", rq->src_part.JL, rq->src_part.IL,
           rq->src_part.JS, rq->src_part.IS);
@@ -352,8 +354,12 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
   rq->common.Al = scheme & 0xff;
   rq->scheme.Kt = div_ceil(rq->common.F, rq->common.T);
 
-  if (rq->scheme.Z == 0 || rq->scheme.N == 0)
-    return NULL;
+  if (rq->scheme.Z == 0)
+    rq->scheme.Z = Z_max;
+
+  if (rq->scheme.N == 0) {
+    rq->scheme.N = 1;
+  }
 
   if (rq->common.T < rq->common.Al || rq->common.T % rq->common.Al != 0 ||
       div_ceil(div_ceil(rq->common.F, rq->common.T), rq->scheme.Z) > K_max) {
@@ -366,8 +372,8 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
 
 #ifdef NANORQ_DEBUG
   fprintf(stderr, "T: %06d AL: %d \n", rq->common.T, rq->common.Al);
-  fprintf(stderr, "Z: %06d N : %06d Kt: %06lu\n", rq->scheme.Z, rq->scheme.N,
-          rq->scheme.Kt);
+  fprintf(stderr, "Z: %06d N : %06d Kt: %06d\n", (int)rq->scheme.Z,
+          (int)rq->scheme.N, (int)rq->scheme.Kt);
 
   fprintf(stderr, "P1 %dx%d P2 %dx%d\n", rq->src_part.JL, rq->src_part.IL,
           rq->src_part.JS, rq->src_part.IS);
