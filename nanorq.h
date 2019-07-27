@@ -13,6 +13,8 @@ typedef struct nanorq nanorq;
 
 // returns a new encoder configured with given parameters
 nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint8_t Al);
+nanorq *nanorq_encoder_new_ex(uint64_t len, uint16_t T, uint16_t K, uint16_t Z,
+                              uint8_t Al);
 
 // returns success of generating symbols for a given sbn
 bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io);
