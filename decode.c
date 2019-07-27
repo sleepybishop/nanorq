@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
 
   nanorq *rq = nanorq_decoder_new(oti_common, oti_scheme);
   if (rq == NULL) {
-    fprintf(stderr, "Coud not initialize encoder.\n");
+    fprintf(stderr, "Coud not initialize decoder.\n");
     return -1;
   }
 
