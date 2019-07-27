@@ -17,9 +17,16 @@ all: test libnanorq.a
 test: encode decode
 	$(MAKE) -f example.make
 
-encode: encode.o libnanorq.a
+encode: encode.o libnanorq.a 
 
 decode: decode.o libnanorq.a
+
+benchmark: benchmark.o libnanorq.a
+	./benchmark 1280 100 5.0
+	./benchmark 1280 500 5.0
+	./benchmark 1280 1000 5.0
+#	./benchmark 1280 5000 5.0
+#	./benchmark 1280 10000 5.0
 
 oblas/liboblas.a:
 	$(MAKE) -C oblas
