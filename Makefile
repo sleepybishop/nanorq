@@ -39,3 +39,15 @@ indent:
 
 scan:
 	scan-build $(MAKE) clean all
+
+profile:
+	$(RM) callgrind.*
+	valgrind --tool=callgrind ./encode war_and_peace.txt 1280
+	gprof2dot --format=callgrind callgrind.* -z main | dot -T svg > sample.svg
+
+gprofile:
+	CPUPROFILE=gperf.prof ./encode war_and_peace.txt 1280
+	pprof ./encode gperf.prof --callgrind > callgrind.gperf
+	gprof2dot --format=callgrind callgrind.gperf -z main | dot -T svg > sample.svg
+#	pprof ./encode gperf.prof --text
+
