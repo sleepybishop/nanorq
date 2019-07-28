@@ -73,7 +73,7 @@ void dump_block(nanorq *rq, struct ioctx *myio, uint8_t sbn, symvec *packets,
 }
 
 void usage(char *prog) {
-  fprintf(stderr, "usage:\n%s <packet_size> <num_packets>\n", prog);
+  fprintf(stderr, "usage:\n%s <packet_size> <num_packets> <overhead_pct>\n", prog);
   exit(1);
 }
 
