@@ -22,6 +22,8 @@ encode: encode.o libnanorq.a
 decode: decode.o libnanorq.a
 
 benchmark: benchmark.o libnanorq.a
+
+bench: benchmark
 	./benchmark 1280 100 5.0
 	./benchmark 1280 500 5.0
 	./benchmark 1280 1000 5.0
@@ -49,12 +51,12 @@ scan:
 
 profile:
 	$(RM) callgrind.*
-	valgrind --tool=callgrind ./encode war_and_peace.txt 1280
+	valgrind --tool=callgrind ./benchmark 1280 100 5.0
 	gprof2dot --format=callgrind callgrind.* -z main | dot -T svg > sample.svg
 
 gprofile:
-	CPUPROFILE=gperf.prof ./encode war_and_peace.txt 1280
-	pprof ./encode gperf.prof --callgrind > callgrind.gperf
+	CPUPROFILE_FREQUENCY=1000 CPUPROFILE=gperf.prof ./benchmark 1280 100 5.0
+	pprof ./benchmark gperf.prof --callgrind > callgrind.gperf
 	gprof2dot --format=callgrind callgrind.gperf -z main | dot -T svg > sample.svg
 #	pprof ./encode gperf.prof --text
 
