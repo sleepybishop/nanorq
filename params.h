@@ -5,7 +5,7 @@
 #include "util.h"
 #include <stdbool.h>
 
-struct pparams {
+typedef struct {
   uint16_t K_padded;
   uint16_t S;
   uint16_t H;
@@ -16,9 +16,9 @@ struct pparams {
   uint16_t U;
   uint16_t B;
   uint16_t J;
-};
+} params;
 
-struct pparams params_init(uint16_t symbols);
-uint16_vec params_get_idxs(struct pparams *prm, uint32_t X);
+params params_init(uint16_t symbols);
+uint16_vec params_get_idxs(uint32_t X, params *P);
 
 #endif
