@@ -19,23 +19,21 @@ static bool is_prime(uint16_t n) {
   return true;
 }
 
-params params_init(uint16_t symbols) {
-  uint16_t idx;
-  params P = {0};
+params params_init(uint16_t K) {
+  params P = {.K = K};
 
-  for (idx = 0; idx < K_padded_size; idx++) {
-    if (K_padded[idx] >= symbols) {
-      P.K_padded = K_padded[idx];
+  for (int i = 0; i < K_padded_size; i++) {
+    if (K <= K_padded[i]) {
+      P.Kprime = K_padded[i];
+      P.J = J_K_padded[i];
+      P.S = S_H_W[i][0];
+      P.H = S_H_W[i][1];
+      P.W = S_H_W[i][2];
       break;
     }
   }
 
-  P.J = J_K_padded[idx];
-  P.S = S_H_W[idx][0];
-  P.H = S_H_W[idx][1];
-  P.W = S_H_W[idx][2];
-
-  P.L = P.K_padded + P.S + P.H;
+  P.L = P.Kprime + P.S + P.H;
   P.P = P.L - P.W;
   P.U = P.P - P.H;
   P.B = P.W - P.S;

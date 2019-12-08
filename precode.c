@@ -79,7 +79,7 @@ static octmat precode_matrix_make_GAMMA(uint16_t dim) {
 
 static void precode_matrix_init_HDPC(params *P, octmat *A) {
   uint16_t m = P->H;
-  uint16_t n = P->K_padded + P->S;
+  uint16_t n = P->Kprime + P->S;
 
   if (m == 0 || n == 0)
     return;
@@ -118,7 +118,7 @@ static void decode_phase0(params *P, octmat *A, struct bitmask *mask,
                           repair_vec *repair_bin, uint16_t num_symbols,
                           uint16_t overhead) {
 
-  size_t padding = P->K_padded - num_symbols;
+  size_t padding = P->Kprime - num_symbols;
   uint16_t num_gaps = bitmask_gaps(mask, num_symbols);
   uint16_t rep_idx = 0;
   for (int gap = 0; gap < P->L && num_gaps > 0; gap++) {
@@ -468,7 +468,7 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
   rep_idx = 0;
   precode_matrix_gen(P, &A, overhead);
 
-  om_resize(&D, P->S + P->H + P->K_padded + overhead, X->cols);
+  om_resize(&D, P->S + P->H + P->Kprime + overhead, X->cols);
 
   int skip = P->S + P->H;
   for (int row = 0; row < X->rows; row++) {
@@ -483,7 +483,7 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
     ocopy(om_P(D), om_P(rs.row), row, 0, D.cols);
   }
 
-  for (int row = skip + P->K_padded; rep_idx < num_repair; row++) {
+  for (int row = skip + P->Kprime; rep_idx < num_repair; row++) {
     struct repair_sym rs = kv_A(*repair_bin, rep_idx++);
     ocopy(om_P(D), om_P(rs.row), row, 0, D.cols);
   }

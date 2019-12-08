@@ -169,7 +169,7 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   P = &enc->P;
   precode_matrix_gen(P, &A, 0);
 
-  om_resize(&D, P->K_padded + P->S + P->H, enc->symbol_size * rq->common.Al);
+  om_resize(&D, P->Kprime + P->S + P->H, enc->symbol_size * rq->common.Al);
 
   int row = 0, col = 0;
   for (row = 0; row < P->S + P->H; row++) {
@@ -439,7 +439,7 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
         return 0;
     }
 
-    uint32_t isi = esi + (P->K_padded - enc->num_symbols);
+    uint32_t isi = esi + (P->Kprime - enc->num_symbols);
     octmat tmp = precode_matrix_encode(P, &enc->symbolmat, isi);
     uint8_t *dst = ((uint8_t *)data);
     uint8_t *octet = om_P(tmp);
