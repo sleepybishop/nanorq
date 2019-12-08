@@ -73,7 +73,8 @@ void dump_block(nanorq *rq, struct ioctx *myio, uint8_t sbn, symvec *packets,
 }
 
 void usage(char *prog) {
-  fprintf(stderr, "usage:\n%s <packet_size> <num_packets> <overhead_pct>\n", prog);
+  fprintf(stderr, "usage:\n%s <packet_size> <num_packets> <overhead_pct>\n",
+          prog);
   exit(1);
 }
 
@@ -83,7 +84,7 @@ int encode(size_t len, uint16_t packet_size, uint16_t num_packets,
   nanorq *rq = nanorq_encoder_new_ex(len, packet_size, num_packets, 0, 8);
 
   if (rq == NULL) {
-    fprintf(stderr, "Coud not initialize encoder.\n");
+    fprintf(stderr, "Could not initialize encoder.\n");
     return -1;
   }
 
@@ -107,7 +108,7 @@ int decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
 
   nanorq *rq = nanorq_decoder_new(oti_common, oti_scheme);
   if (rq == NULL) {
-    fprintf(stderr, "Coud not initialize decoder.\n");
+    fprintf(stderr, "Could not initialize decoder.\n");
     return -1;
   }
 

@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
   nanorq *rq = nanorq_encoder_new(filesize, packet_size, align);
 
   if (rq == NULL) {
-    fprintf(stderr, "Coud not initialize encoder.\n");
+    fprintf(stderr, "Could not initialize encoder.\n");
     return -1;
   }
 
