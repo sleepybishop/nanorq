@@ -6,11 +6,12 @@ io.o\
 params.o\
 precode.o\
 rand.o\
+tuple.o\
 nanorq.o
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
 CFLAGS   = -O2 -g -std=c99 -Wall -funroll-loops -I. -Ioblas
-#LDFLAGS+= -lprofiler
+#LDFLAGS+= -lprofiler -ltcmalloc
 
 all: test libnanorq.a
 
