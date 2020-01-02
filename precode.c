@@ -276,7 +276,7 @@ static bool decode_phase2(octmat *A, octmat *D, uint16_t i, uint16_t u,
       oscal(om_P(*D), row, D->cols, OCTET_DIV(1, multiple));
     }
 
-    for (int del_row = row_start; del_row < row_end; del_row++) {
+    for (int del_row = row; del_row < row_end; del_row++) {
       if (del_row == row)
         continue;
       uint8_t multiple = om_A(*A, del_row, diag);
@@ -286,6 +286,18 @@ static bool decode_phase2(octmat *A, octmat *D, uint16_t i, uint16_t u,
       oaxpy(om_P(*D), om_P(*D), del_row, row, D->cols, multiple);
     }
   }
+
+  for (int del_row = L-1; del_row >= row_start; del_row--) {
+    for (int row = row_start; row < del_row; row++) {
+      uint8_t multiple = om_A(*A, row, del_row);
+      oaxpy(om_P(*D), om_P(*D), row, del_row, D->cols, multiple);
+    }
+  }
+  for (int row = row_start; row < L-1; row++) {
+    ozero(om_P(*A), row, A->cols);
+    om_A(*A, row, row) = 1;
+  }
+
   return true;
 }
 
@@ -380,6 +392,7 @@ octmat precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
   }
 
   success = decode_phase2(A, D, i, u, P->L);
+
   if (!success) {
     kv_destroy(c);
     om_destroy(&X);
