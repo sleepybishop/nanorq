@@ -245,16 +245,21 @@ static bool decode_phase1(params *P, octmat *A, octmat *X, octmat *D,
   return true;
 }
 
-static bool decode_phase2(octmat *A, octmat *D, uint16_t i, uint16_t u,
-                          uint16_t L) {
+static bool decode_phase2(params *P, octmat *A, octmat *D, uint16_t i, uint16_t u) {
 
   uint16_t row_start = i, row_end = A->rows;
   uint16_t col_start = A->cols - u;
 
+  // defer the hdpc rows
+  for(int l = 0; l < P->H; l++) {
+    oswaprow(om_P(*A), l+P->S, A->rows - P->H+l, A->cols);
+    oswaprow(om_P(*D), l+P->S, D->rows - P->H+l, D->cols);
+  }
+
   for (int row = row_start; row < row_end; row++) {
     int row_nonzero = row;
     int diag = col_start + (row - row_start);
-    if (diag >= L) {
+    if (diag >= P->L) {
       break;
     }
     for (; row_nonzero < row_end; row_nonzero++) {
@@ -287,13 +292,13 @@ static bool decode_phase2(octmat *A, octmat *D, uint16_t i, uint16_t u,
     }
   }
 
-  for (int del_row = L-1; del_row >= row_start; del_row--) {
+  for (int del_row = P->L-1; del_row >= row_start; del_row--) {
     for (int row = row_start; row < del_row; row++) {
       uint8_t multiple = om_A(*A, row, del_row);
       oaxpy(om_P(*D), om_P(*D), row, del_row, D->cols, multiple);
     }
   }
-  for (int row = row_start; row < L-1; row++) {
+  for (int row = row_start; row < P->L-1; row++) {
     ozero(om_P(*A), row, A->cols);
     om_A(*A, row, row) = 1;
   }
@@ -391,7 +396,7 @@ octmat precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
     return C;
   }
 
-  success = decode_phase2(A, D, i, u, P->L);
+  success = decode_phase2(P,A, D, i, u);
 
   if (!success) {
     kv_destroy(c);
