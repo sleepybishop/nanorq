@@ -186,7 +186,7 @@ static bool decode_phase1(params *P, octmat *A, octmat *X, octmat *D,
     chosen = chooser_pick(&ch, G, i, sub_rows, non_zero);
     if (chosen != 0) {
       oswaprow(om_P(*A), i, chosen + i, A->cols);
-      oswaprow(om_P(*X), i, chosen + i, X->cols);
+      //oswaprow(om_P(*X), i, chosen + i, X->cols);
       oswaprow(om_P(*D), i, chosen + i, D->cols);
 
       kv_swap(struct tracking_pair, ch.tracking, i, chosen + i);
@@ -200,7 +200,7 @@ static bool decode_phase1(params *P, octmat *A, octmat *X, octmat *D,
       }
 
       oswapcol(om_P(*A), i, i + idx, A->rows, A->cols);
-      oswapcol(om_P(*X), i, i + idx, X->rows, X->cols);
+      //oswapcol(om_P(*X), i, i + idx, X->rows, X->cols);
 
       kv_swap(uint16_t, c, i, i + idx);
     }
@@ -217,7 +217,7 @@ static bool decode_phase1(params *P, octmat *A, octmat *X, octmat *D,
         break;
 
       oswapcol(om_P(*A), col + i, swap + i, A->rows, A->cols);
-      oswapcol(om_P(*X), col + i, swap + i, X->rows, X->cols);
+      //oswapcol(om_P(*X), col + i, swap + i, X->rows, X->cols);
 
       kv_swap(uint16_t, c, col + i, swap + i);
     }
@@ -383,7 +383,9 @@ octmat precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
     return C;
   }
 
+  /*
   om_copy(&X, A);
+  */
   kv_resize(uint16_t, c, P->L);
   for (int l = 0; l < P->L; l++) {
     kv_push(uint16_t, c, l);
@@ -404,7 +406,9 @@ octmat precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
     return C;
   }
 
-  decode_phase3(A, &X, D, i);
+  // skip phase3 when working with dense mats
+  //decode_phase3(A, &X, D, i);
+  //
   om_destroy(&X);
   decode_phase4(A, D, i, u);
   decode_phase5(A, D, i);
