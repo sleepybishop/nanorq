@@ -298,23 +298,10 @@ static bool decode_solve(params *P, octmat *A, octmat *D, uint16_t i,
     }
   }
 
-  for (int del_row = P->L - 1; del_row >= row_start; del_row--) {
-    for (int row = row_start; row < del_row; row++) {
+  for (int del_row = P->L - 1; del_row >= 0; del_row--) {
+    for (int row = 0; row < del_row; row++) {
       multiple = om_A(*A, row, del_row);
       oaxpy(om_P(*D), om_P(*D), row, del_row, D->cols, multiple);
-    }
-  }
-  for (int row = row_start; row < P->L - 1; row++) {
-    ozero(om_P(*A), row, A->cols);
-    om_A(*A, row, row) = 1;
-  }
-
-  for (int row = 0; row < i; row++) {
-    for (int col = 0; col < u; col++) {
-      uint8_t multiple = om_A(*A, row, col + i);
-      if (multiple == 0)
-        continue;
-      oaxpy(om_P(*D), om_P(*D), row, i + col, D->cols, 1);
     }
   }
 
