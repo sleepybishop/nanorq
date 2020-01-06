@@ -171,14 +171,8 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
 
   om_resize(&D, P->Kprime + P->S + P->H, enc->symbol_size * rq->common.Al);
 
-  int row = 0, col = 0;
-  for (row = 0; row < P->S + P->H; row++) {
-    for (col = 0; col < D.cols; col++) {
-      om_A(D, row, col) = 0;
-    }
-  }
-
   struct source_block blk = get_source_block(rq, sbn, enc->symbol_size);
+  int row = P->S + P->H, col = 0;
   for (; row < P->S + P->H + enc->num_symbols; row++) {
     uint32_t symbol_id = row - (P->S + P->H);
     col = 0;
@@ -202,17 +196,10 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
     }
   }
 
-  for (; row < D.rows; row++) {
-    for (int col = 0; col < D.cols; col++)
-      om_A(D, row, col) = 0;
-  }
-
-  enc->symbolmat = precode_matrix_intermediate1(P, &A, &D);
-  if (enc->symbolmat.rows == 0)
+  if (!precode_matrix_intermediate1(P, &A, &D)) {
     return false;
-
-  om_destroy(&A);
-  om_destroy(&D);
+  }
+  enc->symbolmat = D;
 
   return true;
 }

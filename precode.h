@@ -6,7 +6,7 @@
 
 void precode_matrix_gen(params *P, octmat *A, uint16_t overhead);
 
-octmat precode_matrix_intermediate1(params *P, octmat *A, octmat *D);
+bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D);
 bool precode_matrix_intermediate2(octmat *M, octmat *A, octmat *D, params *P,
                                   repair_vec *repair_bin, struct bitmask *mask,
                                   uint16_t num_symbols, uint16_t overhead);
