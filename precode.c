@@ -280,8 +280,8 @@ static bool decode_phase2(params *P, octmat *A, octmat *D, uint16_t i, uint16_t 
 
     multiple = om_A(*A, row, diag);
     if (multiple > 1) {
-      oscal(om_P(*A), row, A->cols, OCTET_DIV(1, multiple));
-      oscal(om_P(*D), row, D->cols, OCTET_DIV(1, multiple));
+      oscal(om_P(*A), row, A->cols, OCT_INV[multiple]);
+      oscal(om_P(*D), row, D->cols, OCT_INV[multiple]);
     }
 
     for (int del_row = row; del_row < row_end; del_row++) {
@@ -348,8 +348,8 @@ static void decode_phase5(octmat *A, octmat *D, uint16_t i) {
   for (int j = 0; j <= i; j++) {
     if (om_A(*A, j, j) != 1) {
       multiple = om_A(*A, j, j);
-      // oscal(om_P(*A), j, A->cols, OCTET_DIV(1, multiple));
-      oscal(om_P(*D), j, D->cols, OCTET_DIV(1, multiple));
+      // oscal(om_P(*A), j, A->cols, OCT_INV[multiple]);
+      oscal(om_P(*D), j, D->cols, OCT_INV[multiple]);
     }
     for (int l = 0; l < j; l++) {
       multiple = om_A(*A, j, l);
