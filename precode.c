@@ -259,11 +259,14 @@ static bool decode_phase2(params *P, octmat *A, octmat *D, uint16_t i, uint16_t 
   for (int row = row_start; row < row_end; row++) {
     int row_nonzero = row;
     int diag = col_start + (row - row_start);
+    uint8_t multiple = 0;
+
     if (diag >= P->L) {
       break;
     }
     for (; row_nonzero < row_end; row_nonzero++) {
-      if (om_A(*A, row_nonzero, diag) != 0) {
+      multiple = om_A(*A, row_nonzero, diag);
+      if (multiple != 0) {
         break;
       }
     }
@@ -275,8 +278,8 @@ static bool decode_phase2(params *P, octmat *A, octmat *D, uint16_t i, uint16_t 
       oswaprow(om_P(*D), row, row_nonzero, D->cols);
     }
 
-    if (om_A(*A, row, diag) > 1) {
-      uint8_t multiple = om_A(*A, row, diag);
+    multiple = om_A(*A, row, diag);
+    if (multiple > 1) {
       oscal(om_P(*A), row, A->cols, OCTET_DIV(1, multiple));
       oscal(om_P(*D), row, D->cols, OCTET_DIV(1, multiple));
     }
@@ -284,7 +287,7 @@ static bool decode_phase2(params *P, octmat *A, octmat *D, uint16_t i, uint16_t 
     for (int del_row = row; del_row < row_end; del_row++) {
       if (del_row == row)
         continue;
-      uint8_t multiple = om_A(*A, del_row, diag);
+      multiple = om_A(*A, del_row, diag);
       if (multiple == 0)
         continue;
       oaxpy(om_P(*A), om_P(*A), del_row, row, A->cols, multiple);
