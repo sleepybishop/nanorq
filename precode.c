@@ -152,10 +152,10 @@ static void decode_patch(params *P, octmat *A, struct bitmask *mask,
   }
 }
 
-static bool decode_amd(params *P, octmat *A, octmat *X, octmat *D,
+static bool decode_amd(params *P, octmat *A, octmat *D,
                           int c[], int *i_val, int *u_val) {
-  uint16_t i = 0;
-  uint16_t u = P->P;
+  int i = 0;
+  int u = P->P;
 
   struct chooser ch = chooser_init(A->rows);
 
@@ -169,9 +169,9 @@ static bool decode_amd(params *P, octmat *A, octmat *X, octmat *D,
   }
 
   while (i + u < P->L) {
-    uint16_t sub_rows = A->rows - i;
-    uint16_t sub_cols = A->cols - i - u;
-    uint16_t chosen, non_zero;
+    int sub_rows = A->rows - i;
+    int sub_cols = A->cols - i - u;
+    int chosen, non_zero;
     struct graph *G = graph_new(sub_cols);
 
     non_zero = chooser_non_zero(&ch, A, G, i, sub_rows, sub_cols);
@@ -186,7 +186,6 @@ static bool decode_amd(params *P, octmat *A, octmat *X, octmat *D,
     chosen = chooser_pick(&ch, G, i, sub_rows, non_zero);
     if (chosen != 0) {
       oswaprow(om_P(*A), i, chosen + i, A->cols);
-      // oswaprow(om_P(*X), i, chosen + i, X->cols);
       oswaprow(om_P(*D), i, chosen + i, D->cols);
 
       kv_swap(struct tracking_pair, ch.tracking, i, chosen + i);
@@ -200,7 +199,6 @@ static bool decode_amd(params *P, octmat *A, octmat *X, octmat *D,
       }
 
       oswapcol(om_P(*A), i, i + idx, A->rows, A->cols);
-      // oswapcol(om_P(*X), i, i + idx, X->rows, X->cols);
 
       TMPSWAP(int, c[i], c[i + idx]);
     }
@@ -217,7 +215,6 @@ static bool decode_amd(params *P, octmat *A, octmat *X, octmat *D,
         break;
 
       oswapcol(om_P(*A), col + i, swap + i, A->rows, A->cols);
-      // oswapcol(om_P(*X), col + i, swap + i, X->rows, X->cols);
 
       TMPSWAP(int, c[col + i], c[swap + i]);
     }
@@ -245,10 +242,9 @@ static bool decode_amd(params *P, octmat *A, octmat *X, octmat *D,
   return true;
 }
 
-static bool decode_solve(params *P, octmat *A, octmat *D, uint16_t i,
-                          uint16_t u) {
+static bool decode_solve(params *P, octmat *A, octmat *D, int i, int u) {
 
-  uint16_t row_start = P->S; // start after ldcp rows
+  int row_start = P->S; // start after ldcp rows
   int rows = A->rows;
   uint8_t multiple;
 
@@ -335,8 +331,6 @@ bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
   bool success;
   int i, u, c[P->L];
 
-  octmat X = OM_INITIAL;
-
   for (int l = 0; l < P->L; l++) {
     c[l] = l;
   }
@@ -346,7 +340,7 @@ bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
     return false;
   }
 
-  success = decode_amd(P, A, &X, D, c, &i, &u);
+  success = decode_amd(P, A, D, c, &i, &u);
   if (!success) {
     om_destroy(A);
     return false;
