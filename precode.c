@@ -186,7 +186,7 @@ static bool decode_phase1(params *P, octmat *A, octmat *X, octmat *D,
     chosen = chooser_pick(&ch, G, i, sub_rows, non_zero);
     if (chosen != 0) {
       oswaprow(om_P(*A), i, chosen + i, A->cols);
-      //oswaprow(om_P(*X), i, chosen + i, X->cols);
+      // oswaprow(om_P(*X), i, chosen + i, X->cols);
       oswaprow(om_P(*D), i, chosen + i, D->cols);
 
       kv_swap(struct tracking_pair, ch.tracking, i, chosen + i);
@@ -200,7 +200,7 @@ static bool decode_phase1(params *P, octmat *A, octmat *X, octmat *D,
       }
 
       oswapcol(om_P(*A), i, i + idx, A->rows, A->cols);
-      //oswapcol(om_P(*X), i, i + idx, X->rows, X->cols);
+      // oswapcol(om_P(*X), i, i + idx, X->rows, X->cols);
 
       kv_swap(uint16_t, c, i, i + idx);
     }
@@ -217,7 +217,7 @@ static bool decode_phase1(params *P, octmat *A, octmat *X, octmat *D,
         break;
 
       oswapcol(om_P(*A), col + i, swap + i, A->rows, A->cols);
-      //oswapcol(om_P(*X), col + i, swap + i, X->rows, X->cols);
+      // oswapcol(om_P(*X), col + i, swap + i, X->rows, X->cols);
 
       kv_swap(uint16_t, c, col + i, swap + i);
     }
@@ -245,49 +245,52 @@ static bool decode_phase1(params *P, octmat *A, octmat *X, octmat *D,
   return true;
 }
 
-static bool decode_phase2(params *P, octmat *A, octmat *D, uint16_t i, uint16_t u) {
+static bool decode_phase2(params *P, octmat *A, octmat *D, uint16_t i,
+                          uint16_t u) {
 
-  uint16_t row_start = i, row_end = A->rows;
-  uint16_t col_start = A->cols - u;
+  uint16_t row_start = P->S; // start after ldcp rows
+  int rows = A->rows;
+  uint8_t multiple;
 
   // defer the hdpc rows
-  for(int l = 0; l < P->H; l++) {
-    oswaprow(om_P(*A), l+P->S, A->rows - P->H+l, A->cols);
-    oswaprow(om_P(*D), l+P->S, D->rows - P->H+l, D->cols);
+  for (int l = 0; l < P->H; l++) {
+    oswaprow(om_P(*A), l + P->S, A->rows - P->H + l, A->cols);
+    oswaprow(om_P(*D), l + P->S, D->rows - P->H + l, D->cols);
   }
 
-  for (int row = row_start; row < row_end; row++) {
-    int row_nonzero = row;
-    int diag = col_start + (row - row_start);
-    uint8_t multiple = 0;
+  for (int row = row_start; row < rows; row++) {
+    int nzrow = row;
 
-    if (diag >= P->L) {
+    // past diagonal
+    if (row >= A->cols) {
       break;
     }
-    for (; row_nonzero < row_end; row_nonzero++) {
-      multiple = om_A(*A, row_nonzero, diag);
+
+    for (; nzrow < rows; nzrow++) {
+      multiple = om_A(*A, nzrow, row);
       if (multiple != 0) {
         break;
       }
     }
 
-    if (row_nonzero == row_end) {
+    if (nzrow == rows) {
+      abort();
       return false;
-    } else if (row != row_nonzero) {
-      oswaprow(om_P(*A), row, row_nonzero, A->cols);
-      oswaprow(om_P(*D), row, row_nonzero, D->cols);
     }
 
-    multiple = om_A(*A, row, diag);
+    if (row != nzrow) {
+      oswaprow(om_P(*A), row, nzrow, A->cols);
+      oswaprow(om_P(*D), row, nzrow, D->cols);
+    }
+
+    multiple = om_A(*A, row, row);
     if (multiple > 1) {
       oscal(om_P(*A), row, A->cols, OCT_INV[multiple]);
       oscal(om_P(*D), row, D->cols, OCT_INV[multiple]);
     }
 
-    for (int del_row = row; del_row < row_end; del_row++) {
-      if (del_row == row)
-        continue;
-      multiple = om_A(*A, del_row, diag);
+    for (int del_row = row + 1; del_row < rows; del_row++) {
+      multiple = om_A(*A, del_row, row);
       if (multiple == 0)
         continue;
       oaxpy(om_P(*A), om_P(*A), del_row, row, A->cols, multiple);
@@ -295,13 +298,13 @@ static bool decode_phase2(params *P, octmat *A, octmat *D, uint16_t i, uint16_t 
     }
   }
 
-  for (int del_row = P->L-1; del_row >= row_start; del_row--) {
+  for (int del_row = P->L - 1; del_row >= row_start; del_row--) {
     for (int row = row_start; row < del_row; row++) {
-      uint8_t multiple = om_A(*A, row, del_row);
+      multiple = om_A(*A, row, del_row);
       oaxpy(om_P(*D), om_P(*D), row, del_row, D->cols, multiple);
     }
   }
-  for (int row = row_start; row < P->L-1; row++) {
+  for (int row = row_start; row < P->L - 1; row++) {
     ozero(om_P(*A), row, A->cols);
     om_A(*A, row, row) = 1;
   }
@@ -401,7 +404,7 @@ octmat precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
     return C;
   }
 
-  success = decode_phase2(P,A, D, i, u);
+  success = decode_phase2(P, A, D, i, u);
 
   if (!success) {
     kv_destroy(c);
@@ -410,7 +413,7 @@ octmat precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
   }
 
   // skip phase3 when working with dense mats
-  //decode_phase3(A, &X, D, i);
+  // decode_phase3(A, &X, D, i);
   //
   om_destroy(&X);
   decode_phase4(A, D, i, u);
