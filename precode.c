@@ -523,8 +523,6 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
     if (bitmask_check(mask, row))
       continue;
     miss_row++;
-    if (bitmask_check(mask, row))
-      continue;
 
     ocopy(om_P(*X), om_P(M), row, miss_row - 1, X->cols);
     bitmask_set(mask, row);
