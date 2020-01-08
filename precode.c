@@ -9,6 +9,18 @@
 #include "precode.h"
 #include "rand.h"
 
+static void precode_matrix_permute(octmat *D, int P[], int n) {
+  for (int i = 0; i < n; i++) {
+    int at = i, mark = -1 ;
+    while (P[at] >= 0) {
+      oswaprow(om_P(*D), i, P[at], D->cols);
+      int tmp = P[at];
+      P[at] = mark;
+      at = tmp;
+    }
+  }
+}
+
 static void precode_matrix_init_LDPC1(octmat *A, uint16_t S, uint16_t B) {
   int row, col;
   for (row = 0; row < S; row++) {
@@ -163,16 +175,16 @@ static bool decode_amd(params *P, octmat *A, octmat *D,
 
   while (i + u < P->L) {
     int Vrows = A->rows - i, Vcols = A->cols - i - u, V0 = i;
-
     int nnz = Vcols + 1;
     int first_one = 0;
+    // find min nnz
     for (int row = 0; row < Vrows; row++) {
-      int vnnz = 0, ones = 0, ones_at[] = {0, 0};
-      onnz(om_P(*A), V0 + row, V0, V0 + Vcols, A->cols, &vnnz, &ones, ones_at);
-      if (row == 0) first_one = ones_at[0];
+      int vnnz = 0;
+      for (int col = V0; col < V0 + Vcols; col++) {
+        vnnz += (om_A(*A, V0 + row, c[col]) > 0);
+      }
       if (vnnz == 0) continue;
-      if (vnnz > nnz)      
-        break;
+      if (vnnz > nnz) break;
       nnz = vnnz;
     }
 
@@ -191,35 +203,38 @@ static bool decode_amd(params *P, octmat *A, octmat *D,
     }
     */
 
+    // find first 1
+    for (int col = V0; col < V0 + Vcols; col++) {
+      if (om_A(*A, V0, c[col]) > 0) {
+        first_one = col - V0;
+        break;
+      }
+    }
+
     // find the first column in V with a nonzero and move to V[0]
     if (first_one > 0) {
       int col = first_one;
-      oswapcol(om_P(*A), V0, V0 + col, A->rows, A->cols);
-      TMPSWAP(int, c[i], c[V0 + col]);
+      TMPSWAP(int, c[V0], c[V0 + col]);
     }
+
     // move all columns with non zeros to the back
     for (int col = Vcols - 1, swap = 1; col > Vcols - nnz; col--) {
-      if (om_A(*A, V0, col + V0) != 0)
+      if (om_A(*A, V0, c[V0 + col]) != 0)
         continue;
-      while (swap < col && om_A(*A, V0, swap + V0) == 0) {
+      while (swap < col && om_A(*A, V0, c[V0 + swap]) == 0) {
         swap++;
       }
 
       if (swap >= col)
         break;
 
-      oswapcol(om_P(*A), col + V0, swap + V0, A->rows, A->cols);
-      TMPSWAP(int, c[col + V0], c[swap + V0]);
+      TMPSWAP(int, c[V0 + col], c[V0 + swap]);
     }
 
     // cancel out non zeroes in rows below V[0]
     for (int row = 1; row < Vrows; row++) {
-      if (om_A(*A, V0 + row, V0) != 0) {
-        uint8_t mnum = om_A(*A, V0 + row, V0);
-        uint8_t mden = om_A(*A, V0, V0);
-        uint8_t beta = (mnum > 0 && mden > 0) ? OCTET_DIV(mnum, mden) : 0;
-        if (beta == 0)
-          continue;
+      if (om_A(*A, V0 + row, c[V0]) != 0) {
+        uint8_t beta = om_A(*A, V0 + row, c[V0]); // assuming V[0][0] is 1
         oaxpy(om_P(*A), om_P(*A), V0 + row, V0, A->cols, beta);
         oaxpy(om_P(*D), om_P(*D), V0 + row, V0, D->cols, beta);
       }
@@ -230,11 +245,10 @@ static bool decode_amd(params *P, octmat *A, octmat *D,
 
   *iptr = i;
   *uptr = u;
-
   return true;
 }
 
-static bool decode_solve(params *P, octmat *A, octmat *D, int i, int u) {
+static bool decode_solve(params *P, octmat *A, octmat *D, int c[], int i, int u) {
 
   int row_start = P->S; // start after ldcp rows
   int rows = A->rows;
@@ -249,14 +263,13 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int i, int u) {
     }
 
     for (; nzrow < rows; nzrow++) {
-      beta = om_A(*A, nzrow, row);
+      beta = om_A(*A, nzrow, c[row]);
       if (beta != 0) {
         break;
       }
     }
 
     if (nzrow == rows) {
-      abort();
       return false;
     }
 
@@ -265,14 +278,14 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int i, int u) {
       oswaprow(om_P(*D), row, nzrow, D->cols);
     }
 
-    beta = om_A(*A, row, row);
+    beta = om_A(*A, row, c[row]);
     if (beta > 1) {
       oscal(om_P(*A), row, A->cols, OCT_INV[beta]);
       oscal(om_P(*D), row, D->cols, OCT_INV[beta]);
     }
 
     for (int del_row = row + 1; del_row < rows; del_row++) {
-      beta = om_A(*A, del_row, row);
+      beta = om_A(*A, del_row, c[row]);
       if (beta == 0)
         continue;
       oaxpy(om_P(*A), om_P(*A), del_row, row, A->cols, beta);
@@ -282,7 +295,7 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int i, int u) {
 
   for (int del_row = P->L - 1; del_row >= 0; del_row--) {
     for (int row = 0; row < del_row; row++) {
-      beta = om_A(*A, row, del_row);
+      beta = om_A(*A, row, c[del_row]);
       oaxpy(om_P(*D), om_P(*D), row, del_row, D->cols, beta);
     }
   }
@@ -299,18 +312,6 @@ void precode_matrix_gen(params *P, octmat *A, uint16_t overhead) {
   precode_matrix_init_HDPC(P, A);
   precode_matrix_add_identity(A, P->H, P->S, P->L - P->H);
   precode_matrix_add_G_ENC(P, A);
-}
-
-void precode_matrix_permute(octmat *D, int P[], int n) {
-  for (int i = 0; i < n; i++) { 
-    int at = i, mark = -1 ;
-    while (P[at] >= 0) { 
-      oswaprow(om_P(*D), i, P[at], D->cols);
-      int tmp = P[at]; 
-      P[at] = mark;
-      at = tmp; 
-    } 
-  }
 }
 
 bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
@@ -332,8 +333,7 @@ bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
     return false;
   }
 
-  success = decode_solve(P, A, D, i, u);
-
+  success = decode_solve(P, A, D, c, i, u);
   if (!success) {
     om_destroy(A);
     return false;
@@ -407,7 +407,6 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
 
   overhead = num_repair - num_gaps;
   rep_idx = 0;
-  precode_matrix_gen(P, &A, overhead);
 
   om_resize(&D, P->S + P->H + P->Kprime + overhead, X->cols);
 
@@ -429,6 +428,7 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
     ocopy(om_P(D), om_P(rs.row), row, 0, D.cols);
   }
 
+  precode_matrix_gen(P, &A, overhead);
   bool precode_ok = precode_matrix_intermediate2(&M, &A, &D, P, repair_bin,
                                                  mask, num_symbols, overhead);
   om_destroy(&D);
