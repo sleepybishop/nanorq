@@ -1,7 +1,5 @@
 OBJ=\
 bitmask.o\
-chooser.o\
-graph.o\
 io.o\
 params.o\
 precode.o\

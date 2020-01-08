@@ -5,8 +5,6 @@
 #include <oblas.h>
 
 #include "bitmask.h"
-#include "chooser.h"
-#include "graph.h"
 #include "params.h"
 #include "precode.h"
 #include "rand.h"
@@ -153,92 +151,86 @@ static void decode_patch(params *P, octmat *A, struct bitmask *mask,
 }
 
 static bool decode_amd(params *P, octmat *A, octmat *D,
-                          int c[], int *i_val, int *u_val) {
+                          int c[], int *iptr, int *uptr) {
   int i = 0;
   int u = P->P;
 
-  struct chooser ch = chooser_init(A->rows);
-
-  for (int row = 0; row < A->rows; row++) {
-    bool is_hdpc = (row >= P->S && row < (P->S + P->H));
-    size_t row_degree = 0;
-    for (int col = 0; col < A->cols - u; col++) {
-      row_degree += (uint8_t)(om_A(*A, row, col));
-    }
-    chooser_add_tracking_pair(&ch, is_hdpc, row_degree);
+  // defer the hdpc rows
+  for (int l = 0; l < P->H; l++) {
+    oswaprow(om_P(*A), l + P->S, A->rows - P->H + l, A->cols);
+    oswaprow(om_P(*D), l + P->S, D->rows - P->H + l, D->cols);
   }
 
   while (i + u < P->L) {
-    int sub_rows = A->rows - i;
-    int sub_cols = A->cols - i - u;
-    int chosen, non_zero;
-    struct graph *G = graph_new(sub_cols);
+    int Vrows = A->rows - i, Vcols = A->cols - i - u, V0 = i;
 
-    non_zero = chooser_non_zero(&ch, A, G, i, sub_rows, sub_cols);
-    if (non_zero == sub_cols + 1) {
-      chooser_clear(&ch);
-      graph_free(G);
+    int nnz = Vcols + 1;
+    int first_one = 0;
+    for (int row = 0; row < Vrows; row++) {
+      int vnnz = 0, ones = 0, ones_at[] = {0, 0};
+      onnz(om_P(*A), V0 + row, V0, V0 + Vcols, A->cols, &vnnz, &ones, ones_at);
+      if (row == 0) first_one = ones_at[0];
+      if (vnnz == 0) continue;
+      if (vnnz > nnz)      
+        break;
+      nnz = vnnz;
+    }
 
-      *i_val = 0;
-      *u_val = 0;
+    if (nnz == Vcols + 1) {
+      *iptr = 0;
+      *uptr = 0;
       return false;
     }
-    chosen = chooser_pick(&ch, G, i, sub_rows, non_zero);
+
+    // skipping row swaps based on # of ones/graph etc.
+    /*
+    int chosen = 0;
     if (chosen != 0) {
-      oswaprow(om_P(*A), i, chosen + i, A->cols);
-      oswaprow(om_P(*D), i, chosen + i, D->cols);
-
-      kv_swap(struct tracking_pair, ch.tracking, i, chosen + i);
+      oswaprow(om_P(*A), V0, chosen + V0, A->cols);
+      oswaprow(om_P(*D), V0, chosen + V0, D->cols);
     }
+    */
 
-    if (om_A(*A, i, i) == 0) {
-      int idx = 1;
-      for (; idx < sub_cols; idx++) {
-        if (om_A(*A, i, idx + i) != 0)
-          break;
-      }
-
-      oswapcol(om_P(*A), i, i + idx, A->rows, A->cols);
-
-      TMPSWAP(int, c[i], c[i + idx]);
+    // find the first column in V with a nonzero and move to V[0]
+    if (first_one > 0) {
+      int col = first_one;
+      oswapcol(om_P(*A), V0, V0 + col, A->rows, A->cols);
+      TMPSWAP(int, c[i], c[V0 + col]);
     }
-    int col = sub_cols - 1;
-    int swap = 1;
-    for (; col > sub_cols - non_zero; col--) {
-      if (om_A(*A, i, col + i) != 0)
+    // move all columns with non zeros to the back
+    for (int col = Vcols - 1, swap = 1; col > Vcols - nnz; col--) {
+      if (om_A(*A, V0, col + V0) != 0)
         continue;
-      while (swap < col && om_A(*A, i, swap + i) == 0) {
+      while (swap < col && om_A(*A, V0, swap + V0) == 0) {
         swap++;
       }
 
       if (swap >= col)
         break;
 
-      oswapcol(om_P(*A), col + i, swap + i, A->rows, A->cols);
-
-      TMPSWAP(int, c[col + i], c[swap + i]);
+      oswapcol(om_P(*A), col + V0, swap + V0, A->rows, A->cols);
+      TMPSWAP(int, c[col + V0], c[swap + V0]);
     }
 
-    for (int row = 1; row < sub_rows; row++) {
-      if (om_A(*A, row + i, i) != 0) {
-        uint8_t mnum = om_A(*A, row + i, i);
-        uint8_t mden = om_A(*A, i, i);
-        uint8_t multiple = (mnum > 0 && mden > 0) ? OCTET_DIV(mnum, mden) : 0;
-        if (multiple == 0)
+    // cancel out non zeroes in rows below V[0]
+    for (int row = 1; row < Vrows; row++) {
+      if (om_A(*A, V0 + row, V0) != 0) {
+        uint8_t mnum = om_A(*A, V0 + row, V0);
+        uint8_t mden = om_A(*A, V0, V0);
+        uint8_t beta = (mnum > 0 && mden > 0) ? OCTET_DIV(mnum, mden) : 0;
+        if (beta == 0)
           continue;
-        oaxpy(om_P(*A), om_P(*A), row + i, i, A->cols, multiple);
-        oaxpy(om_P(*D), om_P(*D), row + i, i, D->cols, multiple);
+        oaxpy(om_P(*A), om_P(*A), V0 + row, V0, A->cols, beta);
+        oaxpy(om_P(*D), om_P(*D), V0 + row, V0, D->cols, beta);
       }
     }
     i++;
-    u += non_zero - 1;
-
-    graph_free(G);
+    u += nnz - 1;
   }
-  chooser_clear(&ch);
 
-  *i_val = i;
-  *u_val = u;
+  *iptr = i;
+  *uptr = u;
+
   return true;
 }
 
@@ -246,13 +238,7 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int i, int u) {
 
   int row_start = P->S; // start after ldcp rows
   int rows = A->rows;
-  uint8_t multiple;
-
-  // defer the hdpc rows
-  for (int l = 0; l < P->H; l++) {
-    oswaprow(om_P(*A), l + P->S, A->rows - P->H + l, A->cols);
-    oswaprow(om_P(*D), l + P->S, D->rows - P->H + l, D->cols);
-  }
+  uint8_t beta;
 
   for (int row = row_start; row < rows; row++) {
     int nzrow = row;
@@ -263,8 +249,8 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int i, int u) {
     }
 
     for (; nzrow < rows; nzrow++) {
-      multiple = om_A(*A, nzrow, row);
-      if (multiple != 0) {
+      beta = om_A(*A, nzrow, row);
+      if (beta != 0) {
         break;
       }
     }
@@ -279,25 +265,25 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int i, int u) {
       oswaprow(om_P(*D), row, nzrow, D->cols);
     }
 
-    multiple = om_A(*A, row, row);
-    if (multiple > 1) {
-      oscal(om_P(*A), row, A->cols, OCT_INV[multiple]);
-      oscal(om_P(*D), row, D->cols, OCT_INV[multiple]);
+    beta = om_A(*A, row, row);
+    if (beta > 1) {
+      oscal(om_P(*A), row, A->cols, OCT_INV[beta]);
+      oscal(om_P(*D), row, D->cols, OCT_INV[beta]);
     }
 
     for (int del_row = row + 1; del_row < rows; del_row++) {
-      multiple = om_A(*A, del_row, row);
-      if (multiple == 0)
+      beta = om_A(*A, del_row, row);
+      if (beta == 0)
         continue;
-      oaxpy(om_P(*A), om_P(*A), del_row, row, A->cols, multiple);
-      oaxpy(om_P(*D), om_P(*D), del_row, row, D->cols, multiple);
+      oaxpy(om_P(*A), om_P(*A), del_row, row, A->cols, beta);
+      oaxpy(om_P(*D), om_P(*D), del_row, row, D->cols, beta);
     }
   }
 
   for (int del_row = P->L - 1; del_row >= 0; del_row--) {
     for (int row = 0; row < del_row; row++) {
-      multiple = om_A(*A, row, del_row);
-      oaxpy(om_P(*D), om_P(*D), row, del_row, D->cols, multiple);
+      beta = om_A(*A, row, del_row);
+      oaxpy(om_P(*D), om_P(*D), row, del_row, D->cols, beta);
     }
   }
 
