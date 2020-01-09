@@ -162,15 +162,14 @@ static void decode_patch(params *P, octmat *A, struct bitmask *mask,
   }
 }
 
-static bool decode_amd(params *P, octmat *A, octmat *D,
-                          int c[], int *iptr, int *uptr) {
+static bool decode_amd(params *P, octmat *A, octmat *D, int c[]) {
   int i = 0;
   int u = P->P;
 
   // defer the hdpc rows
   for (int l = 0; l < P->H; l++) {
     oswaprow(om_P(*A), l + P->S, A->rows - P->H + l, A->cols);
-    oswaprow(om_P(*D), l + P->S, D->rows - P->H + l, D->cols);
+    oswaprow(om_P(*D), l + P->S, A->rows - P->H + l, D->cols);
   }
 
   while (i + u < P->L) {
@@ -189,8 +188,6 @@ static bool decode_amd(params *P, octmat *A, octmat *D,
     }
 
     if (nnz == Vcols + 1) {
-      *iptr = 0;
-      *uptr = 0;
       return false;
     }
 
@@ -198,8 +195,8 @@ static bool decode_amd(params *P, octmat *A, octmat *D,
     /*
     int chosen = 0;
     if (chosen != 0) {
-      oswaprow(om_P(*A), V0, chosen + V0, A->cols);
-      oswaprow(om_P(*D), V0, chosen + V0, D->cols);
+      oswaprow(om_P(*A), V0, V0 + chosen, A->cols);
+      oswaprow(om_P(*D), V0, V0 + chosen, D->cols);
     }
     */
 
@@ -231,7 +228,7 @@ static bool decode_amd(params *P, octmat *A, octmat *D,
       TMPSWAP(int, c[V0 + col], c[V0 + swap]);
     }
 
-    // cancel out non zeroes in rows below V[0]
+    // cancel out non zeros in rows below V[0]
     for (int row = 1; row < Vrows; row++) {
       if (om_A(*A, V0 + row, c[V0]) != 0) {
         uint8_t beta = om_A(*A, V0 + row, c[V0]); // assuming V[0][0] is 1
@@ -243,12 +240,10 @@ static bool decode_amd(params *P, octmat *A, octmat *D,
     u += nnz - 1;
   }
 
-  *iptr = i;
-  *uptr = u;
   return true;
 }
 
-static bool decode_solve(params *P, octmat *A, octmat *D, int c[], int i, int u) {
+static bool decode_solve(params *P, octmat *A, octmat *D, int c[]) {
 
   int row_start = P->S; // start after ldcp rows
   int rows = A->rows;
@@ -286,17 +281,16 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int c[], int i, int u)
 
     for (int del_row = row + 1; del_row < rows; del_row++) {
       beta = om_A(*A, del_row, c[row]);
-      if (beta == 0)
-        continue;
+      if (beta == 0) continue;
       oaxpy(om_P(*A), om_P(*A), del_row, row, A->cols, beta);
       oaxpy(om_P(*D), om_P(*D), del_row, row, D->cols, beta);
     }
   }
 
-  for (int del_row = P->L - 1; del_row >= 0; del_row--) {
-    for (int row = 0; row < del_row; row++) {
-      beta = om_A(*A, row, c[del_row]);
-      oaxpy(om_P(*D), om_P(*D), row, del_row, D->cols, beta);
+  for (int row = P->L - 1; row >= 0; row--) {
+    for (int del_row = 0; del_row < row; del_row++) {
+      beta = om_A(*A, del_row, c[row]);
+      oaxpy(om_P(*D), om_P(*D), del_row, row, D->cols, beta);
     }
   }
 
@@ -316,7 +310,7 @@ void precode_matrix_gen(params *P, octmat *A, uint16_t overhead) {
 
 bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
   bool success;
-  int i, u, c[P->L];
+  int c[P->L];
 
   for (int l = 0; l < P->L; l++) {
     c[l] = l;
@@ -327,26 +321,27 @@ bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
     return false;
   }
 
-  success = decode_amd(P, A, D, c, &i, &u);
+  success = decode_amd(P, A, D, c);
   if (!success) {
     om_destroy(A);
     return false;
   }
 
-  success = decode_solve(P, A, D, c, i, u);
+  success = decode_solve(P, A, D, c);
   if (!success) {
     om_destroy(A);
     return false;
   }
+  om_destroy(A);
 
   precode_matrix_permute(D, c, P->L);
-  om_destroy(A);
+
 
   return true;
 }
 
 bool precode_matrix_intermediate2(octmat *M, octmat *A, octmat *D, params *P,
-                                  repair_vec *repair_bin, struct bitmask *mask,
+                                  repair_vec *repair_bin, struct bitmask *repair_mask,
                                   uint16_t num_symbols, uint16_t overhead) {
 
   int num_gaps, gap = 0, row = 0;
@@ -355,16 +350,16 @@ bool precode_matrix_intermediate2(octmat *M, octmat *A, octmat *D, params *P,
     return false;
   }
 
-  decode_patch(P, A, mask, repair_bin, num_symbols, overhead);
+  decode_patch(P, A, repair_mask, repair_bin, num_symbols, overhead);
 
   if(!precode_matrix_intermediate1(P, A, D)) {
     return false;
   }
 
-  num_gaps = bitmask_gaps(mask, num_symbols);
+  num_gaps = bitmask_gaps(repair_mask, num_symbols);
   om_resize(M, num_gaps, D->cols);
   for (gap = 0; gap < num_symbols && num_gaps > 0; gap++) {
-    if (bitmask_check(mask, gap))
+    if (bitmask_check(repair_mask, gap))
       continue;
     octmat ret = precode_matrix_encode(P, D, gap);
     ocopy(om_P(*M), om_P(ret), row, 0, M->cols);
@@ -389,7 +384,7 @@ octmat precode_matrix_encode(params *P, octmat *C, uint32_t isi) {
 }
 
 bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
-                           struct bitmask *mask) {
+                           struct bitmask *repair_mask) {
   uint16_t num_symbols = X->rows, rep_idx, num_gaps, num_repair, overhead;
 
   octmat A = OM_INITIAL;
@@ -397,7 +392,7 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
   octmat M = OM_INITIAL;
 
   num_repair = kv_size(*repair_bin);
-  num_gaps = bitmask_gaps(mask, num_symbols);
+  num_gaps = bitmask_gaps(repair_mask, num_symbols);
 
   if (num_gaps == 0)
     return true;
@@ -416,7 +411,7 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
   }
 
   for (int gap = 0; gap < num_symbols && rep_idx < num_repair; gap++) {
-    if (bitmask_check(mask, gap))
+    if (bitmask_check(repair_mask, gap))
       continue;
     uint16_t row = skip + gap;
     struct repair_sym rs = kv_A(*repair_bin, rep_idx++);
@@ -430,7 +425,7 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
 
   precode_matrix_gen(P, &A, overhead);
   bool precode_ok = precode_matrix_intermediate2(&M, &A, &D, P, repair_bin,
-                                                 mask, num_symbols, overhead);
+                                                 repair_mask, num_symbols, overhead);
   om_destroy(&D);
 
   if (!precode_ok)
@@ -438,12 +433,12 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
 
   int miss_row = 0;
   for (int row = 0; row < num_symbols && miss_row < M.rows; row++) {
-    if (bitmask_check(mask, row))
+    if (bitmask_check(repair_mask, row))
       continue;
     miss_row++;
 
     ocopy(om_P(*X), om_P(M), row, miss_row - 1, X->cols);
-    bitmask_set(mask, row);
+    bitmask_set(repair_mask, row);
   }
   om_destroy(&M);
   return true;
