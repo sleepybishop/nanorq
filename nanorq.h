@@ -35,7 +35,7 @@ uint64_t nanorq_transfer_length(nanorq *rq);
 uint16_t nanorq_symbol_size(nanorq *rq);
 
 // returns number of blocks (SBN's)
-uint8_t nanorq_blocks(nanorq *rq);
+int nanorq_blocks(nanorq *rq);
 
 // returns the number of symbol rows per sbn block
 uint16_t nanorq_block_symbols(nanorq *rq, uint8_t sbn);

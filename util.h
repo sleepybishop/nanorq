@@ -11,19 +11,20 @@
 #define div_ceil(A, B) ((A) / (B) + ((A) % (B) ? 1 : 0))
 #define div_floor(A, B) ((A) / (B))
 
-#define TMPSWAP(type, a, b)                                                    \
-  do {                                                                         \
-    type __tmp = a;                                                            \
-    a = b;                                                                     \
-    b = __tmp;                                                                 \
-  } while (0)
+#define TMPSWAP(type, a, b) \
+do {                        \
+  type __tmp = a;           \
+  a = b;                    \
+  b = __tmp;                \
+} while (0)
 
-struct pair {
-  uint16_t first;
-  uint16_t second;
+struct sch_op{
+  uint16_t i;
+  uint16_t j;
+  uint16_t beta;
 };
 
-typedef kvec_t(struct pair) pair_vec;
+typedef kvec_t(struct sch_op) schedule;
 typedef kvec_t(uint16_t) uint16_vec;
 
 struct repair_sym {

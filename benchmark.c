@@ -8,8 +8,6 @@
 
 #include <nanorq.h>
 
-#define NUM_SBN 10
-
 #include "kvec.h"
 
 struct sym {
@@ -19,10 +17,10 @@ struct sym {
 
 typedef kvec_t(struct sym) symvec;
 
-uint64_t ms() {
+uint64_t usecs() {
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  return (tv.tv_sec * (uint64_t)1000000 + tv.tv_usec) / 1000;
+  return (tv.tv_sec * (uint64_t)1000000 + tv.tv_usec);
 }
 
 void random_bytes(uint8_t *buf, size_t len) {
@@ -31,9 +29,9 @@ void random_bytes(uint8_t *buf, size_t len) {
   }
 }
 
-void dump_esi(nanorq *rq, struct ioctx *myio, uint8_t sbn, uint32_t esi,
+void dump_esi(nanorq *rq, struct ioctx *myio, int sbn, int esi,
               symvec *packets) {
-  uint16_t packet_size = nanorq_symbol_size(rq);
+  int packet_size = nanorq_symbol_size(rq);
   uint8_t *data = malloc(packet_size);
   uint64_t written = nanorq_encode(rq, (void *)data, esi, sbn, myio);
 
@@ -49,10 +47,10 @@ void dump_esi(nanorq *rq, struct ioctx *myio, uint8_t sbn, uint32_t esi,
   }
 }
 
-void dump_block(nanorq *rq, struct ioctx *myio, uint8_t sbn, symvec *packets,
+void dump_block(nanorq *rq, struct ioctx *myio, int sbn, symvec *packets,
                 float overhead_pct) {
   float expected_loss = 6.0;
-  uint32_t num_esi = nanorq_block_symbols(rq, sbn);
+  int num_esi = nanorq_block_symbols(rq, sbn);
   int overhead = (int)(num_esi * overhead_pct) / 100;
   int num_dropped = 0, num_rep = 0;
   for (uint32_t esi = 0; esi < num_esi; esi++) {
@@ -78,7 +76,7 @@ void usage(char *prog) {
   exit(1);
 }
 
-int encode(size_t len, uint16_t packet_size, uint16_t num_packets,
+double encode(size_t len, uint16_t packet_size, uint16_t num_packets,
            float overhead_pct, struct ioctx *myio, symvec *packets,
            uint64_t *oti_common, uint32_t *oti_scheme) {
   nanorq *rq = nanorq_encoder_new_ex(len, packet_size, num_packets, 0, 8);
@@ -91,19 +89,22 @@ int encode(size_t len, uint16_t packet_size, uint16_t num_packets,
   *oti_common = nanorq_oti_common(rq);
   *oti_scheme = nanorq_oti_scheme_specific(rq);
 
-  uint8_t num_sbn = nanorq_blocks(rq);
-  for (uint8_t b = 0; b < num_sbn; b++) {
+  int num_sbn = nanorq_blocks(rq);
+  double elapsed = 0.0;
+  uint64_t t0 = usecs();
+  for (int b = 0; b < num_sbn; b++) {
     nanorq_generate_symbols(rq, b, myio);
   }
+  elapsed = (usecs() - t0) / 1000000.0;
 
-  for (uint8_t sbn = 0; sbn < num_sbn; sbn++) {
+  for (int sbn = 0; sbn < num_sbn; sbn++) {
     dump_block(rq, myio, sbn, packets, overhead_pct);
   }
   nanorq_free(rq);
-  return 0;
+  return elapsed;
 }
 
-int decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
+double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
            symvec *packets) {
 
   nanorq *rq = nanorq_decoder_new(oti_common, oti_scheme);
@@ -112,7 +113,7 @@ int decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
     return -1;
   }
 
-  uint8_t num_sbn = nanorq_blocks(rq);
+  int num_sbn = nanorq_blocks(rq);
   uint64_t written = 0;
 
   for (int i = 0; i < kv_size(*packets); i++) {
@@ -122,30 +123,35 @@ int decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
       abort();
     }
   }
+  double elapsed = 0.0;
   for (int sbn = 0; sbn < num_sbn; sbn++) {
+    uint64_t t0 = usecs();
     written = nanorq_decode_block(rq, myio, sbn);
+    elapsed += (usecs() - t0) / 1000000.0;
     if (written == 0) {
       fprintf(stderr, "decode of sbn %d failed.\n", sbn);
     }
     nanorq_decode_cleanup(rq, sbn);
   }
   nanorq_free(rq);
-  return 0;
+  return elapsed;
 }
 
 int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
-  uint64_t t0, elapsed;
-  size_t objsize = num_packets * packet_size * NUM_SBN;
+  double elapsed;
+  size_t objsize = 64 * 1024 * 1024;
+  int num_sbn = objsize / (num_packets * packet_size);
+  if (num_sbn > 256) num_sbn = 256;
   uint64_t oti_common;
   uint32_t oti_scheme;
   struct ioctx *myio;
 
-  size_t sz = num_packets * packet_size * NUM_SBN;
+  size_t sz = num_packets * packet_size * num_sbn;
   uint8_t *in = malloc(sz);
   uint8_t *out = malloc(sz);
   random_bytes(in, sz);
 
-  myio = ioctx_from_mem(in, objsize);
+  myio = ioctx_from_mem(in, sz);
   if (!myio) {
     fprintf(stderr, "couldnt access mem at %p\n", in);
     return -1;
@@ -155,38 +161,36 @@ int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
   kv_init(packets);
 
   // encode
-  t0 = ms();
-  encode(objsize, packet_size, num_packets, overhead_pct, myio, &packets,
+  elapsed = encode(sz, packet_size, num_packets, overhead_pct, myio, &packets,
          &oti_common, &oti_scheme);
-  elapsed = ms() - t0;
 
+  if (elapsed < 0) abort();
   fprintf(stdout,
           "ENCODE | Symbol size: %d, symbol count = %d, encoded %.2f MB in "
           "%5.3fsecs, "
           "throughput: "
-          "%6.1fMbit/s \n",
-          packet_size, num_packets, 1.0 * objsize / (1024 * 1024),
-          elapsed / 1000.0, (8.0 * objsize / (1.024 * 1024 * elapsed)));
+          "%6.1fMbit/s (%d sbns)\n",
+          packet_size, num_packets, 1.0 * sz / (1024 * 1024),
+          elapsed, (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
 
   myio->destroy(myio);
 
   // decode
-  myio = ioctx_from_mem(out, objsize);
+  myio = ioctx_from_mem(out, sz);
   if (!myio) {
     fprintf(stderr, "couldnt access mem at %p\n", out);
     return -1;
   }
 
-  t0 = ms();
-  decode(oti_common, oti_scheme, myio, &packets);
-  elapsed = ms() - t0;
+  elapsed = decode(oti_common, oti_scheme, myio, &packets);
 
+  if (elapsed < 0) abort();
   fprintf(stdout,
           "DECODE | Symbol size: %d, symbol count = %d, decoded %.2f MB in "
-          "%5.3fsecs using %3.1f%% overhead, throughput: %6.1fMbit/s \n",
-          packet_size, num_packets, 1.0 * objsize / (1024 * 1024),
-          elapsed / 1000.0, overhead_pct,
-          (8.0 * objsize / (1.024 * 1024 * elapsed)));
+          "%5.3fsecs using %3.1f%% overhead, throughput: %6.1fMbit/s (%d sbns)\n",
+          packet_size, num_packets, 1.0 * sz / (1024 * 1024),
+          elapsed, overhead_pct,
+          (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
 
   myio->destroy(myio);
   // verify

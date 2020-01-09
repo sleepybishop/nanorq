@@ -5,8 +5,8 @@
 
 struct oti_common {
   size_t F;   /* input size in bytes */
-  uint16_t T; /* the symbol size in octets, which MUST be a multiple of Al */
-  uint8_t Al; /* byte alignment, 0 < Al <= 8, 4 is recommended */
+  size_t T; /* the symbol size in octets, which MUST be a multiple of Al */
+  size_t Al; /* byte alignment, 0 < Al <= 8, 4 is recommended */
 };
 
 struct oti_scheme {
@@ -59,7 +59,7 @@ struct nanorq {
 };
 
 static struct oti_scheme gen_scheme_specific(struct oti_common *common,
-                                             uint16_t K, uint16_t Z) {
+                                             int K, int Z) {
   uint16_t Kn = K;
   struct oti_scheme ret = {0};
   ret.Kt = div_ceil(common->F, common->T);
@@ -253,7 +253,7 @@ nanorq *nanorq_encoder_new_ex(uint64_t len, uint16_t T, uint16_t K, uint16_t Z,
 
   rq->scheme = gen_scheme_specific(&rq->common, K, Z);
 
-  if (rq->scheme.Z == 0 || rq->scheme.N == 0 || rq->scheme.Z >= Z_max ||
+  if (rq->scheme.Z == 0 || rq->scheme.N == 0 || rq->scheme.Z > Z_max ||
       div_ceil(rq->scheme.Kt, rq->scheme.Z) > K_max) {
     free(rq);
     return NULL;
@@ -291,17 +291,19 @@ void nanorq_free(nanorq *rq) {
 
 uint64_t nanorq_oti_common(nanorq *rq) {
   uint64_t ret = 0;
-  ret = ((uint64_t)rq->common.F) << 24; /* transfer length */
-  ret |= rq->common.T;                  /* symbol size */
+  /* T is decremented by one to avoid overflow */
+  ret |= ((uint64_t)rq->common.F) << 24; /* transfer length */
+  ret |= (rq->common.T-1) & 0xffff;      /* symbol size */
 
   return ret;
 }
 
 uint32_t nanorq_oti_scheme_specific(nanorq *rq) {
   uint32_t ret = 0;
-  ret = rq->scheme.Z << 24; /* number of source blocks */
-  ret |= rq->scheme.N << 8; /* number of sub-blocks */
-  ret |= rq->common.Al;     /* symbol alignment */
+  /* Z and N are decremented by one to avoid overflow */
+  ret |= (rq->scheme.Z-1) << 24; /* number of source blocks */
+  ret |= (rq->scheme.N-1) << 8;  /* number of sub-blocks */
+  ret |= rq->common.Al;          /* symbol alignment */
 
   return ret;
 }
@@ -318,7 +320,8 @@ uint16_t nanorq_symbol_size(nanorq *rq) { return rq->common.T; }
 
 nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
   uint64_t F = common >> 24;
-  uint16_t T = common & 0xffff;
+  /* increment T by one since it was decremented to avoid overflow */
+  uint16_t T = (common & 0xffff) + 1;
 
   nanorq *rq = NULL;
 
@@ -330,8 +333,9 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
   rq->common.F = F;
   rq->common.T = T;
 
-  rq->scheme.Z = (scheme >> 24) & 0xff;
-  rq->scheme.N = (scheme >> 8) & 0xffff;
+  /* increment Z and N by one since they were decremented to avoid overflow */
+  rq->scheme.Z = ((scheme >> 24) & 0x00ff) + 1;
+  rq->scheme.N = ((scheme >>  8) & 0xffff) + 1;
   rq->common.Al = scheme & 0xff;
   rq->scheme.Kt = div_ceil(rq->common.F, rq->common.T);
 
@@ -382,8 +386,8 @@ uint32_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn) {
   return (uint32_t)((1 << 20) - nanorq_block_symbols(rq, sbn));
 }
 
-uint8_t nanorq_blocks(nanorq *rq) {
-  return (uint8_t)(rq->src_part.JL + rq->src_part.JS);
+int nanorq_blocks(nanorq *rq) {
+  return (int)(rq->src_part.JL + rq->src_part.JS);
 }
 
 uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
