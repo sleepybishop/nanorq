@@ -9,6 +9,11 @@
 #include "precode.h"
 #include "rand.h"
 
+static void sched_push(schedule *S, int type, int i, int j, int beta) {
+  struct sch_op op = {.type = type, .i = i, .j = j, .beta = beta};
+  kv_push(struct sch_op, *S, op);
+}
+
 static void precode_matrix_permute(octmat *D, int P[], int n) {
   for (int i = 0; i < n; i++) {
     int at = i, mark = -1;
@@ -17,6 +22,23 @@ static void precode_matrix_permute(octmat *D, int P[], int n) {
       int tmp = P[at];
       P[at] = mark;
       at = tmp;
+    }
+  }
+}
+
+static void precode_matrix_apply_sched(octmat *D, schedule *S) {
+  for (int i = 0; i < kv_size(*S); i++) {
+    struct sch_op op = kv_A(*S, i);
+    switch (op.type) {
+    case OP_SWAP:
+      oswaprow(om_P(*D), op.i, op.j, D->cols);
+      break;
+    case OP_SCAL:
+      oscal(om_P(*D), op.i, D->cols, op.beta);
+      break;
+    case OP_AXPY:
+      oaxpy(om_P(*D), om_P(*D), op.i, op.j, D->cols, op.beta);
+      break;
     }
   }
 }
@@ -162,7 +184,7 @@ static void decode_patch(params *P, octmat *A, struct bitmask *mask,
   }
 }
 
-static bool decode_amd(params *P, octmat *A, octmat *D, int c[]) {
+static bool decode_amd(params *P, octmat *A, octmat *D, int c[], schedule *S) {
   int i = 0;
   int u = P->P;
 
@@ -198,7 +220,7 @@ static bool decode_amd(params *P, octmat *A, octmat *D, int c[]) {
     int chosen = 0;
     if (chosen != 0) {
       oswaprow(om_P(*A), V0, V0 + chosen, A->cols);
-      oswaprow(om_P(*D), V0, V0 + chosen, D->cols);
+      sched_push(S, OP_SWAP, V0, V0 + chosen, 0);
     }
     */
 
@@ -235,7 +257,7 @@ static bool decode_amd(params *P, octmat *A, octmat *D, int c[]) {
       if (om_A(*A, V0 + row, c[V0]) != 0) {
         uint8_t beta = om_A(*A, V0 + row, c[V0]); // assuming V[0][0] is 1
         oaxpy(om_P(*A), om_P(*A), V0 + row, V0, A->cols, beta);
-        oaxpy(om_P(*D), om_P(*D), V0 + row, V0, D->cols, beta);
+        sched_push(S, OP_AXPY, V0 + row, V0, beta);
       }
     }
     i++;
@@ -245,7 +267,8 @@ static bool decode_amd(params *P, octmat *A, octmat *D, int c[]) {
   return true;
 }
 
-static bool decode_solve(params *P, octmat *A, octmat *D, int c[]) {
+static bool decode_solve(params *P, octmat *A, octmat *D, int c[],
+                         schedule *S) {
   int row_start = P->S; // start after ldpc rows
   int rows = A->rows;
   uint8_t beta;
@@ -271,13 +294,13 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int c[]) {
 
     if (row != nzrow) {
       oswaprow(om_P(*A), row, nzrow, A->cols);
-      oswaprow(om_P(*D), row, nzrow, D->cols);
+      sched_push(S, OP_SWAP, row, nzrow, 0);
     }
 
     beta = om_A(*A, row, c[row]);
     if (beta > 1) {
       oscal(om_P(*A), row, A->cols, OCT_INV[beta]);
-      oscal(om_P(*D), row, D->cols, OCT_INV[beta]);
+      sched_push(S, OP_SCAL, row, 0, OCT_INV[beta]);
     }
 
     for (int del_row = row + 1; del_row < rows; del_row++) {
@@ -285,7 +308,7 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int c[]) {
       if (beta == 0)
         continue;
       oaxpy(om_P(*A), om_P(*A), del_row, row, A->cols, beta);
-      oaxpy(om_P(*D), om_P(*D), del_row, row, D->cols, beta);
+      sched_push(S, OP_AXPY, del_row, row, beta);
     }
   }
 
@@ -294,7 +317,8 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int c[]) {
       beta = om_A(*A, del_row, c[row]);
       if (beta == 0)
         continue;
-      oaxpy(om_P(*D), om_P(*D), del_row, row, D->cols, beta);
+      // oaxpy(om_P(*A), om_P(*A), del_row, row, A->cols, beta);
+      sched_push(S, OP_AXPY, del_row, row, beta);
     }
   }
 
@@ -315,7 +339,10 @@ void precode_matrix_gen(params *P, octmat *A, uint16_t overhead) {
 bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
   bool success;
   int c[P->L];
+  schedule S;
 
+  kv_init(S);
+  kv_resize(struct sch_op, S, (P->L * P->L) / 2);
   for (int l = 0; l < P->L; l++) {
     c[l] = l;
   }
@@ -325,21 +352,23 @@ bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
     return false;
   }
 
-  success = decode_amd(P, A, D, c);
+  success = decode_amd(P, A, D, c, &S);
   if (!success) {
     om_destroy(A);
     return false;
   }
 
-  success = decode_solve(P, A, D, c);
+  success = decode_solve(P, A, D, c, &S);
   if (!success) {
     om_destroy(A);
     return false;
   }
   om_destroy(A);
 
+  precode_matrix_apply_sched(D, &S);
   precode_matrix_permute(D, c, P->L);
 
+  kv_destroy(S);
   return true;
 }
 
