@@ -4,8 +4,8 @@
 #include "precode.h"
 
 struct oti_common {
-  size_t F;   /* input size in bytes */
-  size_t T; /* the symbol size in octets, which MUST be a multiple of Al */
+  size_t F;  /* input size in bytes */
+  size_t T;  /* the symbol size in octets, which MUST be a multiple of Al */
   size_t Al; /* byte alignment, 0 < Al <= 8, 4 is recommended */
 };
 
@@ -58,15 +58,15 @@ struct nanorq {
   struct decoder_core *decoders[Z_max];
 };
 
-static struct oti_scheme gen_scheme_specific(struct oti_common *common,
-                                             int K, int Z) {
+static struct oti_scheme gen_scheme_specific(struct oti_common *common, int K,
+                                             int Z) {
   uint16_t Kn = K;
   struct oti_scheme ret = {0};
   ret.Kt = div_ceil(common->F, common->T);
 
   if (K == 0) {
     Kn = ret.Kt;
-    /* 
+    /*
      * user more sbns by unless otherwise specified
      * performance is better for small K
      *
@@ -291,7 +291,7 @@ uint64_t nanorq_oti_common(nanorq *rq) {
   uint64_t ret = 0;
   /* T is decremented by one to avoid overflow */
   ret |= ((uint64_t)rq->common.F) << 24; /* transfer length */
-  ret |= (rq->common.T-1) & 0xffff;      /* symbol size */
+  ret |= (rq->common.T - 1) & 0xffff;    /* symbol size */
 
   return ret;
 }
@@ -299,9 +299,9 @@ uint64_t nanorq_oti_common(nanorq *rq) {
 uint32_t nanorq_oti_scheme_specific(nanorq *rq) {
   uint32_t ret = 0;
   /* Z and N are decremented by one to avoid overflow */
-  ret |= (rq->scheme.Z-1) << 24; /* number of source blocks */
-  ret |= (rq->scheme.N-1) << 8;  /* number of sub-blocks */
-  ret |= rq->common.Al;          /* symbol alignment */
+  ret |= (rq->scheme.Z - 1) << 24; /* number of source blocks */
+  ret |= (rq->scheme.N - 1) << 8;  /* number of sub-blocks */
+  ret |= rq->common.Al;            /* symbol alignment */
 
   return ret;
 }
@@ -333,7 +333,7 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
 
   /* increment Z and N by one since they were decremented to avoid overflow */
   rq->scheme.Z = ((scheme >> 24) & 0x00ff) + 1;
-  rq->scheme.N = ((scheme >>  8) & 0xffff) + 1;
+  rq->scheme.N = ((scheme >> 8) & 0xffff) + 1;
   rq->common.Al = scheme & 0xff;
   rq->scheme.Kt = div_ceil(rq->common.F, rq->common.T);
 
@@ -409,8 +409,8 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
       if (io->seek(io, offset)) {
         got = io->read(io, data, stride);
       }
-      written+=got;
-      dst+=got;
+      written += got;
+      dst += got;
       // add padding
       for (int byte = got; byte < stride; byte++) {
         *dst = 0;
@@ -463,15 +463,15 @@ static struct decoder_core *nanorq_block_decoder(nanorq *rq, uint8_t sbn) {
   dec->P = params_init(num_symbols);
   dec->repair_mask = bitmask_new(num_symbols);
   int decode_rows = dec->P.S + dec->P.H + dec->P.Kprime;
-  decode_rows += decode_rows/5; // estimate 20 pct overhead
+  decode_rows += decode_rows / 5; // estimate 20 pct overhead
   om_resize(&dec->D, decode_rows, symbol_size * rq->common.Al);
 
   rq->decoders[sbn] = dec;
   return dec;
 }
 
-uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io, uint8_t sbn, uint32_t esi, uint8_t *ptr, size_t dlen)
-{
+uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io, uint8_t sbn,
+                                 uint32_t esi, uint8_t *ptr, size_t dlen) {
   struct decoder_core *dec = nanorq_block_decoder(rq, sbn);
   if (dec == NULL)
     return 0;
@@ -479,7 +479,7 @@ uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io, uint8_t sbn, uint
   struct source_block blk = get_source_block(rq, sbn, dec->symbol_size);
 
   uint64_t written = 0;
-  int col = 0; 
+  int col = 0;
   for (int i = 0; i < dec->symbol_size;) {
     size_t offset = get_symbol_offset(&blk, i, dec->num_symbols, esi);
     uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
@@ -500,7 +500,8 @@ uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io, uint8_t sbn, uint
   return written;
 }
 
-bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid, struct ioctx *io) {
+bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid,
+                               struct ioctx *io) {
   uint8_t sbn = fid >> 24;
   uint32_t esi = (fid & 0x00ffffff);
 
@@ -562,13 +563,13 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   params *P = &dec->P;
   octmat M = OM_INITIAL;
   bool success =
-    precode_matrix_decode(P, &dec->D, &M, &dec->repair_bin, dec->repair_mask);
+      precode_matrix_decode(P, &dec->D, &M, &dec->repair_bin, dec->repair_mask);
   if (!success) {
     om_destroy(&M);
     return false;
   }
 
-  int miss_row = 0; 
+  int miss_row = 0;
   for (int row = 0; row < dec->num_symbols && miss_row < M.rows; row++) {
     if (bitmask_check(dec->repair_mask, row))
       continue;

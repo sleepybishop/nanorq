@@ -54,8 +54,8 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "block %d is %d packets, lost %d, have %d repair\n", sbn,
             nanorq_block_symbols(rq, sbn), nanorq_num_missing(rq, sbn),
             nanorq_num_repair(rq, sbn));
-    if(!nanorq_repair_block(rq, myio, sbn)) {
-     fprintf(stderr, "decode of sbn %d failed.\n", sbn);
+    if (!nanorq_repair_block(rq, myio, sbn)) {
+      fprintf(stderr, "decode of sbn %d failed.\n", sbn);
     }
     nanorq_decode_cleanup(rq, sbn);
   }

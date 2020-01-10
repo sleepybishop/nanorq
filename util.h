@@ -11,18 +11,14 @@
 #define div_ceil(A, B) ((A) / (B) + ((A) % (B) ? 1 : 0))
 #define div_floor(A, B) ((A) / (B))
 
-#define TMPSWAP(type, a, b) \
-do {                        \
-  type __tmp = a;           \
-  a = b;                    \
-  b = __tmp;                \
-} while (0)
+#define TMPSWAP(type, a, b)                                                    \
+  do {                                                                         \
+    type __tmp = a;                                                            \
+    a = b;                                                                     \
+    b = __tmp;                                                                 \
+  } while (0)
 
-enum {
-  OP_SWAP = 0,
-  OP_SCAL = 1,
-  OP_AXPY = 2
-};
+enum { OP_SWAP = 0, OP_SCAL = 1, OP_AXPY = 2 };
 
 struct sch_op {
   uint8_t type;

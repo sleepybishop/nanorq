@@ -11,7 +11,7 @@
 
 static void precode_matrix_permute(octmat *D, int P[], int n) {
   for (int i = 0; i < n; i++) {
-    int at = i, mark = -1 ;
+    int at = i, mark = -1;
     while (P[at] >= 0) {
       oswaprow(om_P(*D), i, P[at], D->cols);
       int tmp = P[at];
@@ -125,8 +125,8 @@ static void precode_matrix_add_G_ENC(params *P, octmat *A) {
 }
 
 static void decode_patch(params *P, octmat *A, struct bitmask *mask,
-                          repair_vec *repair_bin, uint16_t num_symbols,
-                          uint16_t overhead) {
+                         repair_vec *repair_bin, uint16_t num_symbols,
+                         uint16_t overhead) {
 
   size_t padding = P->Kprime - num_symbols;
   uint16_t num_gaps = bitmask_gaps(mask, num_symbols);
@@ -182,8 +182,10 @@ static bool decode_amd(params *P, octmat *A, octmat *D, int c[]) {
       for (int col = V0; col < V0 + Vcols; col++) {
         vnnz += (om_A(*A, V0 + row, c[col]) > 0);
       }
-      if (vnnz == 0) continue;
-      if (vnnz > nnz) break;
+      if (vnnz == 0)
+        continue;
+      if (vnnz > nnz)
+        break;
       nnz = vnnz;
     }
 
@@ -280,7 +282,8 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int c[]) {
 
     for (int del_row = row + 1; del_row < rows; del_row++) {
       beta = om_A(*A, del_row, c[row]);
-      if (beta == 0) continue;
+      if (beta == 0)
+        continue;
       oaxpy(om_P(*A), om_P(*A), del_row, row, A->cols, beta);
       oaxpy(om_P(*D), om_P(*D), del_row, row, D->cols, beta);
     }
@@ -289,6 +292,8 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int c[]) {
   for (int row = P->L - 1; row >= 0; row--) {
     for (int del_row = 0; del_row < row; del_row++) {
       beta = om_A(*A, del_row, c[row]);
+      if (beta == 0)
+        continue;
       oaxpy(om_P(*D), om_P(*D), del_row, row, D->cols, beta);
     }
   }
@@ -335,11 +340,11 @@ bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
 
   precode_matrix_permute(D, c, P->L);
 
-
   return true;
 }
 
-void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr, size_t len) {
+void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr,
+                              size_t len) {
   uint16_vec idxs = params_get_idxs(isi, P);
   for (int idx = 0; idx < kv_size(idxs); idx++) {
     oaddrow(ptr, om_P(*D), 0, kv_A(idxs, idx), len);
@@ -348,8 +353,9 @@ void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr, 
 }
 
 bool precode_matrix_intermediate2(params *P, octmat *A, octmat *D, octmat *M,
-                                  repair_vec *repair_bin, struct bitmask *repair_mask,
-                                  int num_symbols, int overhead) {
+                                  repair_vec *repair_bin,
+                                  struct bitmask *repair_mask, int num_symbols,
+                                  int overhead) {
   int num_gaps, gap = 0, row = 0;
 
   if (D->cols == 0) {
@@ -358,7 +364,7 @@ bool precode_matrix_intermediate2(params *P, octmat *A, octmat *D, octmat *M,
 
   decode_patch(P, A, repair_mask, repair_bin, num_symbols, overhead);
 
-  if(!precode_matrix_intermediate1(P, A, D)) {
+  if (!precode_matrix_intermediate1(P, A, D)) {
     return false;
   }
 
@@ -374,7 +380,8 @@ bool precode_matrix_intermediate2(params *P, octmat *A, octmat *D, octmat *M,
   return true;
 }
 
-bool precode_matrix_decode(params *P, octmat *D, octmat *M, repair_vec *repair_bin,
+bool precode_matrix_decode(params *P, octmat *D, octmat *M,
+                           repair_vec *repair_bin,
                            struct bitmask *repair_mask) {
   int rep_idx, num_gaps, num_repair, overhead, skip = P->S + P->H;
   int num_symbols = P->K;
@@ -418,7 +425,7 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M, repair_vec *repair_b
   }
 
   precode_matrix_gen(P, &A, overhead);
-  bool precode_ok = precode_matrix_intermediate2(P, &A, D, M, repair_bin,
-                                                 repair_mask, num_symbols, overhead);
+  bool precode_ok = precode_matrix_intermediate2(
+      P, &A, D, M, repair_bin, repair_mask, num_symbols, overhead);
   return precode_ok;
 }

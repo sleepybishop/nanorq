@@ -77,8 +77,8 @@ void usage(char *prog) {
 }
 
 double encode(size_t len, uint16_t packet_size, uint16_t num_packets,
-           float overhead_pct, struct ioctx *myio, symvec *packets,
-           uint64_t *oti_common, uint32_t *oti_scheme) {
+              float overhead_pct, struct ioctx *myio, symvec *packets,
+              uint64_t *oti_common, uint32_t *oti_scheme) {
   nanorq *rq = nanorq_encoder_new_ex(len, packet_size, num_packets, 0, 8);
 
   if (rq == NULL) {
@@ -105,7 +105,7 @@ double encode(size_t len, uint16_t packet_size, uint16_t num_packets,
 }
 
 double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
-           symvec *packets) {
+              symvec *packets) {
 
   nanorq *rq = nanorq_decoder_new(oti_common, oti_scheme);
   if (rq == NULL) {
@@ -139,7 +139,8 @@ int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
   double elapsed;
   size_t objsize = 64 * 1024 * 1024;
   int num_sbn = objsize / (num_packets * packet_size);
-  if (num_sbn > 256) num_sbn = 256;
+  if (num_sbn > 256)
+    num_sbn = 256;
   uint64_t oti_common;
   uint32_t oti_scheme;
   struct ioctx *myio;
@@ -160,16 +161,17 @@ int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
 
   // encode
   elapsed = encode(sz, packet_size, num_packets, overhead_pct, myio, &packets,
-         &oti_common, &oti_scheme);
+                   &oti_common, &oti_scheme);
 
-  if (elapsed < 0) abort();
+  if (elapsed < 0)
+    abort();
   fprintf(stdout,
           "ENCODE | Symbol size: %d, symbol count = %d, encoded %.2f MB in "
           "%5.3fsecs, "
           "throughput: "
           "%6.1fMbit/s (%d sbns)\n",
-          packet_size, num_packets, 1.0 * sz / (1024 * 1024),
-          elapsed, (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
+          packet_size, num_packets, 1.0 * sz / (1024 * 1024), elapsed,
+          (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
 
   myio->destroy(myio);
 
@@ -182,13 +184,14 @@ int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
 
   elapsed = decode(oti_common, oti_scheme, myio, &packets);
 
-  if (elapsed < 0) abort();
-  fprintf(stdout,
-          "DECODE | Symbol size: %d, symbol count = %d, decoded %.2f MB in "
-          "%5.3fsecs using %3.1f%% overhead, throughput: %6.1fMbit/s (%d sbns)\n",
-          packet_size, num_packets, 1.0 * sz / (1024 * 1024),
-          elapsed, overhead_pct,
-          (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
+  if (elapsed < 0)
+    abort();
+  fprintf(
+      stdout,
+      "DECODE | Symbol size: %d, symbol count = %d, decoded %.2f MB in "
+      "%5.3fsecs using %3.1f%% overhead, throughput: %6.1fMbit/s (%d sbns)\n",
+      packet_size, num_packets, 1.0 * sz / (1024 * 1024), elapsed, overhead_pct,
+      (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
 
   myio->destroy(myio);
   // verify

@@ -57,7 +57,8 @@ void nanorq_encode_cleanup(nanorq *rq, uint8_t sbn);
 nanorq *nanorq_decoder_new(uint64_t common, uint32_t specific);
 
 // returns the success of adding a symbol to the decoder
-bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid, struct ioctx *io);
+bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid,
+                               struct ioctx *io);
 
 // returns number of symbol gaps in decoder for given block
 uint32_t nanorq_num_missing(nanorq *rq, uint8_t sbn);
