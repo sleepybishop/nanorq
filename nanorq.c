@@ -412,11 +412,9 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
       if (io->seek(io, offset)) {
         got = io->read(io, buf, stride);
       }
-      for (int byte = 0; byte < got; byte++) {
-        *dst = buf[byte];
-        dst++;
-        written++;
-      }
+      memcpy(dst, buf, got);
+      written+=got;
+      dst+=got;
       for (int byte = got; byte < stride; byte++) {
         *dst = 0;
         dst++;
@@ -433,17 +431,11 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
     }
 
     uint32_t isi = esi + (P->Kprime - enc->num_symbols);
-    octmat tmp = precode_matrix_encode(P, &enc->D, isi);
-    uint8_t *dst = ((uint8_t *)data);
-    uint8_t *octet = om_P(tmp);
-    for (int i = 0; i < enc->symbol_size; i++) {
-      for (int byte = 0; byte < rq->common.Al; byte++) {
-        *dst = (octet == NULL) ? 0 : *(octet++);
-        dst++;
-        written++;
-      }
-    }
-    om_destroy(&tmp);
+    uint8_t tmp[enc->D.cols_al];
+    memset(tmp, 0, enc->D.cols_al);
+    precode_matrix_fill_slot(P, &enc->D, isi, tmp, enc->D.cols);
+    memcpy(data, tmp, enc->symbol_size * rq->common.Al);
+    written += enc->symbol_size * rq->common.Al;
   }
   return written;
 }

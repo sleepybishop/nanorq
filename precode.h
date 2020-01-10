@@ -11,8 +11,7 @@ bool precode_matrix_intermediate2(octmat *M, octmat *A, octmat *D, params *P,
                                   repair_vec *repair_bin, struct bitmask *mask,
                                   uint16_t num_symbols, uint16_t overhead);
 
-octmat precode_matrix_encode(params *P, octmat *C, uint32_t isi);
-
+void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr, size_t len);
 bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
                            struct bitmask *mask);
 

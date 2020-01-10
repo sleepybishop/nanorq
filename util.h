@@ -18,10 +18,17 @@ do {                        \
   b = __tmp;                \
 } while (0)
 
-struct sch_op{
+enum {
+  OP_SWAP = 0,
+  OP_SCAL = 1,
+  OP_AXPY = 2
+};
+
+struct sch_op {
+  uint8_t type;
+  uint8_t beta;
   uint16_t i;
   uint16_t j;
-  uint16_t beta;
 };
 
 typedef kvec_t(struct sch_op) schedule;

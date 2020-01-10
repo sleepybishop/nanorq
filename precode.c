@@ -244,8 +244,7 @@ static bool decode_amd(params *P, octmat *A, octmat *D, int c[]) {
 }
 
 static bool decode_solve(params *P, octmat *A, octmat *D, int c[]) {
-
-  int row_start = P->S; // start after ldcp rows
+  int row_start = P->S; // start after ldpc rows
   int rows = A->rows;
   uint8_t beta;
 
@@ -340,10 +339,17 @@ bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
   return true;
 }
 
+void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr, size_t len) {
+  uint16_vec idxs = params_get_idxs(isi, P);
+  for (int idx = 0; idx < kv_size(idxs); idx++) {
+    oaddrow(ptr, om_P(*D), 0, kv_A(idxs, idx), len);
+  }
+  kv_destroy(idxs);
+}
+
 bool precode_matrix_intermediate2(octmat *M, octmat *A, octmat *D, params *P,
                                   repair_vec *repair_bin, struct bitmask *repair_mask,
                                   uint16_t num_symbols, uint16_t overhead) {
-
   int num_gaps, gap = 0, row = 0;
 
   if (D->cols == 0) {
@@ -361,26 +367,11 @@ bool precode_matrix_intermediate2(octmat *M, octmat *A, octmat *D, params *P,
   for (gap = 0; gap < num_symbols && num_gaps > 0; gap++) {
     if (bitmask_check(repair_mask, gap))
       continue;
-    octmat ret = precode_matrix_encode(P, D, gap);
-    ocopy(om_P(*M), om_P(ret), row, 0, M->cols);
-    om_destroy(&ret);
+    precode_matrix_fill_slot(P, D, gap, om_R(*M, row), M->cols);
     row++;
     num_gaps--;
   }
   return true;
-}
-
-octmat precode_matrix_encode(params *P, octmat *C, uint32_t isi) {
-  octmat ret = OM_INITIAL;
-  om_resize(&ret, 1, C->cols);
-
-  uint16_vec idxs = params_get_idxs(isi, P);
-  for (int idx = 0; idx < kv_size(idxs); idx++) {
-    oaddrow(om_P(ret), om_P(*C), 0, kv_A(idxs, idx), ret.cols);
-  }
-  kv_destroy(idxs);
-
-  return ret;
 }
 
 bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
