@@ -347,9 +347,9 @@ void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr, 
   kv_destroy(idxs);
 }
 
-bool precode_matrix_intermediate2(octmat *M, octmat *A, octmat *D, params *P,
+bool precode_matrix_intermediate2(params *P, octmat *A, octmat *D, octmat *M,
                                   repair_vec *repair_bin, struct bitmask *repair_mask,
-                                  uint16_t num_symbols, uint16_t overhead) {
+                                  int num_symbols, int overhead) {
   int num_gaps, gap = 0, row = 0;
 
   if (D->cols == 0) {
@@ -374,13 +374,11 @@ bool precode_matrix_intermediate2(octmat *M, octmat *A, octmat *D, params *P,
   return true;
 }
 
-bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
+bool precode_matrix_decode(params *P, octmat *D, octmat *M, repair_vec *repair_bin,
                            struct bitmask *repair_mask) {
-  uint16_t num_symbols = X->rows, rep_idx, num_gaps, num_repair, overhead;
-
+  int rep_idx, num_gaps, num_repair, overhead, skip = P->S + P->H;
+  int num_symbols = P->K;
   octmat A = OM_INITIAL;
-  octmat D = OM_INITIAL;
-  octmat M = OM_INITIAL;
 
   num_repair = kv_size(*repair_bin);
   num_gaps = bitmask_gaps(repair_mask, num_symbols);
@@ -394,43 +392,33 @@ bool precode_matrix_decode(params *P, octmat *X, repair_vec *repair_bin,
   overhead = num_repair - num_gaps;
   rep_idx = 0;
 
-  om_resize(&D, P->S + P->H + P->Kprime + overhead, X->cols);
-
-  int skip = P->S + P->H;
-  for (int row = 0; row < X->rows; row++) {
-    ocopy(om_P(D), om_P(*X), skip + row, row, D.cols);
+  if (D->rows < P->S + P->H + P->Kprime + overhead) {
+    // overhead estimate was insuffucient, have to reallocate
+    octmat X = OM_INITIAL;
+    om_resize(&X, P->S + P->H + P->Kprime + overhead, D->cols);
+    memcpy(X.data, D->data, D->rows * D->cols_al);
+    uint8_t *tmp = D->data;
+    D->data = X.data;
+    X.data = tmp;
+    om_destroy(&X);
   }
+  D->rows = P->S + P->H + P->Kprime + overhead;
 
   for (int gap = 0; gap < num_symbols && rep_idx < num_repair; gap++) {
     if (bitmask_check(repair_mask, gap))
       continue;
     uint16_t row = skip + gap;
     struct repair_sym rs = kv_A(*repair_bin, rep_idx++);
-    ocopy(om_P(D), om_P(rs.row), row, 0, D.cols);
+    ocopy(om_P(*D), om_P(rs.row), row, 0, D->cols);
   }
 
   for (int row = skip + P->Kprime; rep_idx < num_repair; row++) {
     struct repair_sym rs = kv_A(*repair_bin, rep_idx++);
-    ocopy(om_P(D), om_P(rs.row), row, 0, D.cols);
+    ocopy(om_P(*D), om_P(rs.row), row, 0, D->cols);
   }
 
   precode_matrix_gen(P, &A, overhead);
-  bool precode_ok = precode_matrix_intermediate2(&M, &A, &D, P, repair_bin,
+  bool precode_ok = precode_matrix_intermediate2(P, &A, D, M, repair_bin,
                                                  repair_mask, num_symbols, overhead);
-  om_destroy(&D);
-
-  if (!precode_ok)
-    return false;
-
-  int miss_row = 0;
-  for (int row = 0; row < num_symbols && miss_row < M.rows; row++) {
-    if (bitmask_check(repair_mask, row))
-      continue;
-    miss_row++;
-
-    ocopy(om_P(*X), om_P(M), row, miss_row - 1, X->cols);
-    bitmask_set(repair_mask, row);
-  }
-  om_destroy(&M);
-  return true;
+  return precode_ok;
 }

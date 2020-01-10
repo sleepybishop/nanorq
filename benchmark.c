@@ -114,11 +114,10 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
   }
 
   int num_sbn = nanorq_blocks(rq);
-  uint64_t written = 0;
 
   for (int i = 0; i < kv_size(*packets); i++) {
     struct sym s = kv_A(*packets, i);
-    if (!nanorq_decoder_add_symbol(rq, (void *)s.data, s.fid)) {
+    if (!nanorq_decoder_add_symbol(rq, (void *)s.data, s.fid, myio)) {
       fprintf(stderr, "adding symbol %d failed.\n", s.fid);
       abort();
     }
@@ -126,11 +125,10 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
   double elapsed = 0.0;
   for (int sbn = 0; sbn < num_sbn; sbn++) {
     uint64_t t0 = usecs();
-    written = nanorq_decode_block(rq, myio, sbn);
-    elapsed += (usecs() - t0) / 1000000.0;
-    if (written == 0) {
+    if (!nanorq_repair_block(rq, myio, sbn)) {
       fprintf(stderr, "decode of sbn %d failed.\n", sbn);
     }
+    elapsed += (usecs() - t0) / 1000000.0;
     nanorq_decode_cleanup(rq, sbn);
   }
   nanorq_free(rq);

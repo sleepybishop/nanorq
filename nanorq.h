@@ -57,7 +57,7 @@ void nanorq_encode_cleanup(nanorq *rq, uint8_t sbn);
 nanorq *nanorq_decoder_new(uint64_t common, uint32_t specific);
 
 // returns the success of adding a symbol to the decoder
-bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid);
+bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid, struct ioctx *io);
 
 // returns number of symbol gaps in decoder for given block
 uint32_t nanorq_num_missing(nanorq *rq, uint8_t sbn);
@@ -65,8 +65,8 @@ uint32_t nanorq_num_missing(nanorq *rq, uint8_t sbn);
 // returns number of repair symbols in decoder for given block
 uint32_t nanorq_num_repair(nanorq *rq, uint8_t sbn);
 
-// returns the number of bytes written from decoding a given sbn
-uint64_t nanorq_decode_block(nanorq *rq, struct ioctx *io, uint8_t sbn);
+// return whether or not sbn was successfully repaired
+bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn);
 
 // cleanup decoder resouces of a given block
 void nanorq_decode_cleanup(nanorq *rq, uint8_t sbn);

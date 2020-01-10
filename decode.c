@@ -42,11 +42,10 @@ int main(int argc, char *argv[]) {
   uint32_t fid;
   uint16_t packet_size = nanorq_symbol_size(rq);
   uint8_t packet[packet_size];
-  uint64_t written = 0;
   while (fread(&fid, 1, sizeof(fid), ih)) {
     fid = be32toh(fid);
     fread(packet, packet_size, 1, ih);
-    if (!nanorq_decoder_add_symbol(rq, (void *)packet, fid)) {
+    if (!nanorq_decoder_add_symbol(rq, (void *)packet, fid, myio)) {
       fprintf(stderr, "adding symbol %d failed.\n", fid);
       abort();
     }
@@ -55,9 +54,8 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "block %d is %d packets, lost %d, have %d repair\n", sbn,
             nanorq_block_symbols(rq, sbn), nanorq_num_missing(rq, sbn),
             nanorq_num_repair(rq, sbn));
-    written = nanorq_decode_block(rq, myio, sbn);
-    if (written == 0) {
-      fprintf(stderr, "decode of sbn %d failed.\n", sbn);
+    if(!nanorq_repair_block(rq, myio, sbn)) {
+     fprintf(stderr, "decode of sbn %d failed.\n", sbn);
     }
     nanorq_decode_cleanup(rq, sbn);
   }

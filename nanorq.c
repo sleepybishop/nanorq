@@ -174,24 +174,22 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   om_resize(&D, P->Kprime + P->S + P->H, enc->symbol_size * rq->common.Al);
 
   struct source_block blk = get_source_block(rq, sbn, enc->symbol_size);
-  int row = P->S + P->H, col = 0;
+  int row = P->S + P->H;
   for (; row < P->S + P->H + enc->num_symbols; row++) {
-    uint32_t symbol_id = row - (P->S + P->H);
-    col = 0;
+    uint32_t esi = row - (P->S + P->H);
+    int col = 0;
     for (int i = 0; i < enc->symbol_size;) {
-      size_t offset = get_symbol_offset(&blk, i, enc->num_symbols, symbol_id);
+      size_t offset = get_symbol_offset(&blk, i, enc->num_symbols, esi);
       uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
       uint16_t stride = sublen * rq->common.Al;
-      uint8_t buf[stride];
       i += sublen;
 
       size_t got = 0;
       if (io->seek(io, offset)) {
-        got = io->read(io, buf, stride);
+        got = io->read(io, om_R(D, row) + col, stride);
       }
-      for (int byte = 0; byte < got; byte++) {
-        om_A(D, row, col++) = buf[byte];
-      }
+      col += stride;
+      // add padding
       for (int byte = got; byte < stride; byte++) {
         om_A(D, row, col++) = 0;
       }
@@ -405,16 +403,15 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
       size_t offset = get_symbol_offset(&blk, i, enc->num_symbols, esi);
       uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
       uint16_t stride = sublen * rq->common.Al;
-      uint8_t buf[stride];
       i += sublen;
 
       int got = 0;
       if (io->seek(io, offset)) {
-        got = io->read(io, buf, stride);
+        got = io->read(io, data, stride);
       }
-      memcpy(dst, buf, got);
       written+=got;
       dst+=got;
+      // add padding
       for (int byte = got; byte < stride; byte++) {
         *dst = 0;
         dst++;
@@ -465,14 +462,45 @@ static struct decoder_core *nanorq_block_decoder(nanorq *rq, uint8_t sbn) {
   dec->symbol_size = symbol_size;
   dec->P = params_init(num_symbols);
   dec->repair_mask = bitmask_new(num_symbols);
-  om_resize(&dec->D, num_symbols, symbol_size * rq->common.Al);
+  int decode_rows = dec->P.S + dec->P.H + dec->P.Kprime;
+  decode_rows += decode_rows/5; // estimate 20 pct overhead
+  om_resize(&dec->D, decode_rows, symbol_size * rq->common.Al);
 
   rq->decoders[sbn] = dec;
   return dec;
 }
 
-bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid) {
+uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io, uint8_t sbn, uint32_t esi, uint8_t *ptr, size_t dlen)
+{
+  struct decoder_core *dec = nanorq_block_decoder(rq, sbn);
+  if (dec == NULL)
+    return 0;
 
+  struct source_block blk = get_source_block(rq, sbn, dec->symbol_size);
+
+  uint64_t written = 0;
+  int col = 0; 
+  for (int i = 0; i < dec->symbol_size;) {
+    size_t offset = get_symbol_offset(&blk, i, dec->num_symbols, esi);
+    uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
+    uint16_t stride = sublen * rq->common.Al;
+    i += sublen;
+
+    if (offset >= rq->common.F)
+      continue;
+    if (io->seek(io, offset)) {
+      uint16_t len = stride;
+      if ((offset + stride) >= rq->common.F) {
+        len = (rq->common.F - offset);
+      }
+      written += io->write(io, ptr + col, len);
+      col += stride;
+    }
+  }
+  return written;
+}
+
+bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid, struct ioctx *io) {
   uint8_t sbn = fid >> 24;
   uint32_t esi = (fid & 0x00ffffff);
 
@@ -494,8 +522,11 @@ bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid) {
     return true; // already got this esi
 
   if (esi < dec->num_symbols) {
-    memcpy(om_R(dec->D, esi), data, cols);
+    // write original symbol to decode mat and output stream
+    memcpy(om_R(dec->D, dec->P.S + dec->P.H + esi), data, cols);
+    nanorq_decode_write_esi(rq, io, sbn, esi, data, cols);
   } else {
+    // save repair symbol for precode patching
     struct repair_sym rs = {esi, OM_INITIAL};
     om_resize(&rs.row, 1, cols);
     memcpy(om_R(rs.row, 0), data, cols);
@@ -523,45 +554,31 @@ uint32_t nanorq_num_repair(nanorq *rq, uint8_t sbn) {
   return kv_size(dec->repair_bin);
 }
 
-uint64_t nanorq_decode_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
-  uint64_t written = 0;
-
+bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   struct decoder_core *dec = nanorq_block_decoder(rq, sbn);
-  params *P = &dec->P;
   if (dec == NULL)
     return 0;
 
+  params *P = &dec->P;
+  octmat M = OM_INITIAL;
   bool success =
-      precode_matrix_decode(P, &dec->D, &dec->repair_bin, dec->repair_mask);
+    precode_matrix_decode(P, &dec->D, &M, &dec->repair_bin, dec->repair_mask);
   if (!success) {
-    return 0;
+    om_destroy(&M);
+    return false;
   }
 
-  int max_esi = dec->D.rows;
-  int row = 0, col = 0;
-  struct source_block blk = get_source_block(rq, sbn, dec->symbol_size);
-  for (; row < max_esi; row++) {
-    col = 0;
-    for (int i = 0; i < dec->symbol_size;) {
-      size_t offset = get_symbol_offset(&blk, i, max_esi, row);
-      uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
-      uint16_t stride = sublen * rq->common.Al;
-      i += sublen;
-
-      if (io->seek(io, offset)) {
-        uint16_t len = stride;
-        if (offset >= rq->common.F)
-          continue;
-        if ((offset + stride) >= rq->common.F) {
-          len = (rq->common.F - offset);
-        }
-        written += io->write(io, om_R(dec->D, row) + col, len);
-        col += stride;
-      }
-    }
+  int miss_row = 0; 
+  for (int row = 0; row < dec->num_symbols && miss_row < M.rows; row++) {
+    if (bitmask_check(dec->repair_mask, row))
+      continue;
+    nanorq_decode_write_esi(rq, io, sbn, row, om_R(M, miss_row), M.cols);
+    bitmask_set(dec->repair_mask, row);
+    miss_row++;
   }
+  om_destroy(&M);
 
-  return written;
+  return (nanorq_num_missing(rq, sbn) == 0);
 }
 
 void nanorq_decode_cleanup(nanorq *rq, uint8_t sbn) {
