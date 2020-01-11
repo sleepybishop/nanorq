@@ -23,7 +23,7 @@ uint64_t usecs() {
   return (tv.tv_sec * (uint64_t)1000000 + tv.tv_usec);
 }
 
-void random_bytes(uint8_t *buf, size_t len) {
+void random_bytes(uint8_t *buf, uint64_t len) {
   for (int i = 0; i < len; i++) {
     buf[i] = rand();
   }
@@ -76,7 +76,7 @@ void usage(char *prog) {
   exit(1);
 }
 
-double encode(size_t len, uint16_t packet_size, uint16_t num_packets,
+double encode(uint64_t len, uint16_t packet_size, uint16_t num_packets,
               float overhead_pct, struct ioctx *myio, symvec *packets,
               uint64_t *oti_common, uint32_t *oti_scheme) {
   nanorq *rq = nanorq_encoder_new_ex(len, packet_size, num_packets, 0, 8);
@@ -137,7 +137,7 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
 
 int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
   double elapsed;
-  size_t objsize = 64 * 1024 * 1024;
+  uint64_t objsize = 128 * 1024 * 1024;
   int num_sbn = objsize / (num_packets * packet_size);
   if (num_sbn > 256)
     num_sbn = 256;
@@ -145,7 +145,7 @@ int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
   uint32_t oti_scheme;
   struct ioctx *myio;
 
-  size_t sz = num_packets * packet_size * num_sbn;
+  uint64_t sz = num_packets * packet_size * num_sbn;
   uint8_t *in = malloc(sz);
   uint8_t *out = malloc(sz);
   random_bytes(in, sz);
