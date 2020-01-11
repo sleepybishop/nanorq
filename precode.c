@@ -94,21 +94,6 @@ static octmat precode_matrix_make_MT(uint16_t rows, uint16_t cols) {
   return MT;
 }
 
-static octmat precode_matrix_make_GAMMA(uint16_t dim) {
-  octmat GAMMA = OM_INITIAL;
-  om_resize(&GAMMA, dim, dim);
-
-  for (int row = 0; row < GAMMA.rows; row++) {
-    int col;
-    for (col = 0; col <= row; col++)
-      om_A(GAMMA, row, col) = OCT_EXP[(row - col) % OCT_EXP_SIZE];
-    for (; col < GAMMA.cols; col++) {
-      om_A(GAMMA, row, col) = 0;
-    }
-  }
-  return GAMMA;
-}
-
 static void precode_matrix_init_HDPC(params *P, octmat *A) {
   uint16_t m = P->H;
   uint16_t n = P->Kprime + P->S;
@@ -117,21 +102,32 @@ static void precode_matrix_init_HDPC(params *P, octmat *A) {
     return;
 
   octmat MT = precode_matrix_make_MT(m, n);
-  octmat GAMMA = precode_matrix_make_GAMMA(n);
   octmat MTxGAMMA = OM_INITIAL;
+  om_resize(&MTxGAMMA, m, n);
 
-  om_resize(&MTxGAMMA, MT.rows, GAMMA.cols);
+  uint8_t gv[n];
+  for (int col = 0; col < n; col++) {
+    gv[col] = OCT_EXP[col % OCT_EXP_SIZE];
+  }
 
-  ogemm(om_P(MT), om_P(GAMMA), om_P(MTxGAMMA), MT.rows, MT.cols, GAMMA.cols);
+  uint8_t *ap, *cp = om_P(MTxGAMMA);
+  for (int row = 0; row < m; row++, cp += MT.cols_al) {
+    ap = om_P(MT) + (row * MT.cols_al);
+    for (int idx = 0; idx < n; idx++) {
+      uint8_t tmp[n];
+      for (int col = 0; col < n; col++)
+        tmp[col] = (col > idx) ? 0 : gv[idx - col];
+      oaxpy(cp, tmp, 0, 0, n, ap[idx]);
+    }
+  }
 
   int row, col;
-  for (col = 0; col < GAMMA.cols; col++) {
-    for (row = 0; row < MT.rows; row++) {
+  for (col = 0; col < n; col++) {
+    for (row = 0; row < m; row++) {
       om_A(*A, P->S + row, col) = om_A(MTxGAMMA, row, col);
     }
   }
   om_destroy(&MT);
-  om_destroy(&GAMMA);
   om_destroy(&MTxGAMMA);
 }
 
