@@ -169,7 +169,6 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
     return true;
 
   P = &enc->P;
-  precode_matrix_gen(P, &A, 0);
 
   om_resize(&D, P->Kprime + P->S + P->H, enc->symbol_size * rq->common.Al);
 
@@ -196,6 +195,7 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
     }
   }
 
+  A = precode_matrix_gen(P, 0);
   if (!precode_matrix_intermediate1(P, &A, &D)) {
     return false;
   }

@@ -8,11 +8,7 @@
 #include "params.h"
 #include "precode.h"
 #include "rand.h"
-
-static void sched_push(schedule *S, int i, int j, int beta) {
-  struct sch_op op = {.i = i, .j = j, .beta = beta};
-  kv_push(struct sch_op, *S, op);
-}
+#include "sched.h"
 
 static void precode_matrix_permute(octmat *D, int P[], int n) {
   for (int i = 0; i < n; i++) {
@@ -27,8 +23,8 @@ static void precode_matrix_permute(octmat *D, int P[], int n) {
 }
 
 static void precode_matrix_apply_sched(octmat *D, schedule *S) {
-  for (int i = 0; i < kv_size(*S); i++) {
-    struct sch_op op = kv_A(*S, i);
+  for (int i = 0; i < kv_size(S->ops); i++) {
+    struct sch_op op = kv_A(S->ops, i);
     if (op.beta)
       oaxpy(om_P(*D), om_P(*D), op.i, op.j, D->cols, op.beta);
     else
@@ -173,10 +169,8 @@ static void decode_patch(params *P, octmat *A, struct bitmask *mask,
   }
 }
 
-static bool decode_amd(params *P, octmat *A, octmat *D, int c[], int d[],
-                       schedule *S) {
-  int i = 0;
-  int u = P->P;
+static bool decode_amd(params *P, octmat *A, schedule *S) {
+  int i = 0, u = P->P, *c = S->c, *d = S->d;
 
   while (i + u < P->L) {
     int Vrows = A->rows - i, Vcols = A->cols - i - u, V0 = i;
@@ -251,11 +245,9 @@ static bool decode_amd(params *P, octmat *A, octmat *D, int c[], int d[],
   return true;
 }
 
-static bool decode_solve(params *P, octmat *A, octmat *D, int c[], int d[],
-                         schedule *S) {
-  int row_start = P->S; // start after ldpc rows
-  int rows = A->rows;
-  uint8_t beta;
+static bool decode_solve(params *P, octmat *A, schedule *S) {
+  int rows = A->rows, row_start = P->S; // start after ldpc rows
+  int *c = S->c, *d = S->d, beta;
 
   for (int row = row_start; row < rows; row++) {
     int nzrow = row;
@@ -308,67 +300,67 @@ static bool decode_solve(params *P, octmat *A, octmat *D, int c[], int d[],
   return true;
 }
 
-void precode_matrix_gen(params *P, octmat *A, uint16_t overhead) {
-  om_resize(A, P->L + overhead, P->L);
+octmat precode_matrix_gen(params *P, int overhead) {
+  octmat A = OM_INITIAL;
+  om_resize(&A, P->L + overhead, P->L);
 
-  precode_matrix_init_LDPC1(A, P->S, P->B);
-  precode_matrix_add_identity(A, P->S, 0, P->B);
-  precode_matrix_init_LDPC2(A, P->W, P->S, P->P);
-  precode_matrix_init_HDPC(P, A);
-  precode_matrix_add_identity(A, P->H, P->S, P->L - P->H);
-  precode_matrix_add_G_ENC(P, A);
+  precode_matrix_init_LDPC1(&A, P->S, P->B);
+  precode_matrix_add_identity(&A, P->S, 0, P->B);
+  precode_matrix_init_LDPC2(&A, P->W, P->S, P->P);
+
+  precode_matrix_init_HDPC(P, &A);
+  precode_matrix_add_identity(&A, P->H, P->S, P->L - P->H);
+  precode_matrix_add_G_ENC(P, &A);
+
+  return A;
 }
 
-bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
-  bool success;
-  int c[P->L], d[A->rows];
-  schedule S;
-
-  kv_init(S);
-  kv_resize(struct sch_op, S, (P->L * P->L) / 2);
-  for (int l = 0; l < P->L; l++) {
-    c[l] = l;
-  }
-  for (int l = 0; l < A->rows; l++) {
-    d[l] = l;
-  }
-
-  if (P->L == 0 || A == NULL || A->rows == 0 || A->cols == 0) {
-    om_destroy(A);
-    return false;
-  }
+schedule *precode_matrix_invert(params *P, octmat *A) {
+  int rows = A->rows, cols = A->cols;
+  schedule *S = sched_new(rows, cols, P->L * P->L / 5);
 
   // defer the hdpc rows
   for (int l = 0; l < P->H; l++) {
-    TMPSWAP(int, d[l + P->S], d[A->rows - P->H + l]);
+    TMPSWAP(int, S->d[l + P->S], S->d[A->rows - P->H + l]);
   }
 
   // bring the eye block between ldpc blocks to front
   for (int l = 0; l < P->S; l++) {
-    TMPSWAP(int, c[l], c[P->B + l]);
+    TMPSWAP(int, S->c[l], S->c[P->B + l]);
   }
 
-  success = decode_amd(P, A, D, c, d, &S);
-  if (!success) {
+  if (!decode_amd(P, A, S)) {
     om_destroy(A);
-    return false;
+    sched_free(S);
+    return NULL;
   }
 
-  success = decode_solve(P, A, D, c, d, &S);
-  if (!success) {
+  if (!decode_solve(P, A, S)) {
     om_destroy(A);
-    return false;
+    sched_free(S);
+    return NULL;
   }
 
-  int dinv[A->rows];
-  for (int l = 0; l < A->rows; l++)
-    dinv[d[l]] = l;
-  precode_matrix_apply_sched(D, &S);
-  precode_matrix_permute(D, dinv, A->rows);
-  precode_matrix_permute(D, c, P->L);
   om_destroy(A);
+  return S;
+}
 
-  kv_destroy(S);
+bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
+  int rows = A->rows, cols = A->cols;
+
+  schedule *S = precode_matrix_invert(P, A);
+  if (S == NULL)
+    return false;
+
+  int dinv[rows];
+  for (int i = 0; i < rows; i++)
+    dinv[S->d[i]] = i;
+
+  precode_matrix_apply_sched(D, S);
+  precode_matrix_permute(D, dinv, rows);
+  precode_matrix_permute(D, S->c, cols);
+
+  sched_free(S);
   return true;
 }
 
@@ -453,7 +445,7 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M,
     ocopy(om_P(*D), om_P(rs.row), row, 0, D->cols);
   }
 
-  precode_matrix_gen(P, &A, overhead);
+  A = precode_matrix_gen(P, overhead);
   bool precode_ok = precode_matrix_intermediate2(
       P, &A, D, M, repair_bin, repair_mask, num_symbols, overhead);
   return precode_ok;

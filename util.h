@@ -18,20 +18,12 @@
     b = __tmp;                                                                 \
   } while (0)
 
-struct sch_op {
-  uint8_t beta;
-  uint16_t i;
-  uint16_t j;
-};
-
-typedef kvec_t(struct sch_op) schedule;
-typedef kvec_t(uint16_t) uint16_vec;
-
 struct repair_sym {
   uint32_t esi;
   octmat row;
 };
 
 typedef kvec_t(struct repair_sym) repair_vec;
+typedef kvec_t(uint16_t) uint16_vec;
 
 #endif
