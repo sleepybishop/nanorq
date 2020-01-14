@@ -169,91 +169,118 @@ static void decode_patch(params *P, octmat *A, struct bitmask *mask,
   }
 }
 
-static bool decode_amd(params *P, octmat *A, schedule *S) {
+static int decode_nnz(octmat *A, int row, int s, int e, int c[], int d[]) {
+  int nz = 0;
+  for (int col = s; col < e; col++) {
+    nz += (om_A(*A, d[row], c[col]) > 0);
+  }
+  return nz;
+}
+
+static int decode_nz_fwd(octmat *A, int row, int s, int e, int c[], int d[]) {
+  for (int col = s; col < e; col++) {
+    int tmp = om_A(*A, d[row], c[col]);
+    if (tmp > 0)
+      return col;
+  }
+  return e;
+}
+
+static int decode_nz_rev(octmat *A, int row, int s, int e, int c[], int d[]) {
+  for (int col = e - 1; col >= s; col--) {
+    int tmp = om_A(*A, d[row], c[col]);
+    if (tmp == 0)
+      return col;
+  }
+  return s;
+}
+
+static void decode_rear_swap(octmat *A, int row, int s, int e, int c[],
+                             int d[]) {
+  while (s < e) {
+    int swap1 = decode_nz_fwd(A, row, s, e, c, d);
+    if (swap1 == e)
+      return;
+    int swap2 = decode_nz_rev(A, row, s, e, c, d);
+    if (swap2 == s)
+      return;
+    if (swap1 >= swap2)
+      return;
+    TMPSWAP(int, c[swap1], c[swap2]);
+    s++;
+    e--;
+  }
+}
+
+static bool decode_amd(params *P, octmat *A, schedule *S, int *vp) {
   int i = 0, u = P->P, *c = S->c, *d = S->d;
+  int rows = A->rows, cols = A->cols;
+
+  int counts[rows];
+  for (int row = 0; row < rows; row++) {
+    counts[d[row]] = decode_nnz(A, row, 0, cols - u, c, d);
+  }
 
   while (i + u < P->L) {
-    int Vrows = A->rows - i, Vcols = A->cols - i - u, V0 = i;
-    int nnz = Vcols + 1;
-    int first_one = 0;
-    // find min nnz
-    for (int row = 0; row < Vrows; row++) {
-      int vnnz = 0;
-      for (int col = V0; col < V0 + Vcols; col++) {
-        vnnz += (om_A(*A, d[V0 + row], c[col]) > 0);
-      }
-      if (vnnz == 0)
-        continue;
-      if (vnnz > nnz)
-        break;
-      nnz = vnnz;
-    }
+    int Vrows = rows - i, Vcols = cols - i - u, V0 = i;
+    int r = Vcols + 1, chosen = Vrows;
 
-    if (nnz == Vcols + 1) {
+    for (int row = V0; row < rows; row++) {
+      int nz = counts[d[row]];
+      if (nz > 0 && nz < r) {
+        chosen = row;
+        r = nz;
+        if (nz < 2)
+          break;
+      }
+    }
+    if (r == Vcols + 1) {
       return false;
     }
-
-    // skipping row swaps based on # of ones/graph etc.
-    /*
-    int chosen = 0;
-    if (chosen != 0) {
-      TMPSWAP(int, d[V0], d[V0 + chosen]);
+    if (V0 != chosen) {
+      TMPSWAP(int, d[V0], d[chosen]);
     }
-    */
-
-    // find first 1
-    for (int col = V0; col < V0 + Vcols; col++) {
-      if (om_A(*A, d[V0], c[col]) > 0) {
-        first_one = col - V0;
-        break;
+    // find first one
+    if (om_A(*A, d[V0], c[V0]) == 0) {
+      int first = decode_nz_fwd(A, V0, V0 + 1, V0 + Vcols, c, d);
+      TMPSWAP(int, c[V0], c[first]);
+    }
+    decode_rear_swap(A, V0, V0 + 1, V0 + Vcols, c, d);
+    // decrement nz counts if row had nz at V0 or nz's at last r - 1 cols
+    for (int row = V0 + 1; row < rows; row++) {
+      if (om_A(*A, d[row], c[V0])) {
+        counts[d[row]]--;
+      }
+      for (int col = 0; col < (r - 1); col++) {
+        if (om_A(*A, d[row], c[V0 + Vcols - col - 1])) {
+          counts[d[row]]--;
+        }
       }
     }
-
-    // find the first column in V with a nonzero and move to V[0]
-    if (first_one > 0) {
-      int col = first_one;
-      TMPSWAP(int, c[V0], c[V0 + col]);
-    }
-
-    // move all columns with non zeros to the back
-    for (int col = Vcols - 1, swap = 1; col > Vcols - nnz; col--) {
-      if (om_A(*A, d[V0], c[V0 + col]) != 0)
-        continue;
-      while (swap < col && om_A(*A, d[V0], c[V0 + swap]) == 0) {
-        swap++;
-      }
-
-      if (swap >= col)
-        break;
-
-      TMPSWAP(int, c[V0 + col], c[V0 + swap]);
-    }
-
-    // cancel out non zeros in rows below V[0]
     for (int row = 1; row < Vrows; row++) {
       uint8_t beta = om_A(*A, d[V0 + row], c[V0]);
       if (beta != 0) {
-        // assuming V[0][0] is 1
         oaxpy(om_P(*A), om_P(*A), d[V0 + row], d[V0], A->cols, beta);
         sched_push(S, d[V0 + row], d[V0], beta);
       }
     }
     i++;
-    u += nnz - 1;
+    u += r - 1;
   }
-
+  *vp = i;
   return true;
 }
 
-static bool decode_solve(params *P, octmat *A, schedule *S) {
-  int rows = A->rows, row_start = P->S; // start after ldpc rows
-  int *c = S->c, *d = S->d, beta;
+static bool decode_solve(params *P, octmat *A, schedule *S, int row_start) {
+  int rows = A->rows, cols = A->cols;
+  int *c = S->c, *d = S->d;
+  uint8_t beta;
 
   for (int row = row_start; row < rows; row++) {
     int nzrow = row;
 
     // past diagonal
-    if (row >= A->cols) {
+    if (row >= cols) {
       break;
     }
 
@@ -274,7 +301,7 @@ static bool decode_solve(params *P, octmat *A, schedule *S) {
 
     beta = om_A(*A, d[row], c[row]);
     if (beta > 1) {
-      oscal(om_P(*A), d[row], A->cols, OCT_INV[beta]);
+      oscal(om_P(*A), d[row], cols, OCT_INV[beta]);
       sched_push(S, d[row], OCT_INV[beta], 0);
     }
 
@@ -282,7 +309,7 @@ static bool decode_solve(params *P, octmat *A, schedule *S) {
       beta = om_A(*A, d[del_row], c[row]);
       if (beta == 0)
         continue;
-      oaxpy(om_P(*A), om_P(*A), d[del_row], d[row], A->cols, beta);
+      oaxpy(om_P(*A), om_P(*A), d[del_row], d[row], cols, beta);
       sched_push(S, d[del_row], d[row], beta);
     }
   }
@@ -292,7 +319,7 @@ static bool decode_solve(params *P, octmat *A, schedule *S) {
       beta = om_A(*A, d[del_row], c[row]);
       if (beta == 0)
         continue;
-      // oaxpy(om_P(*A), om_P(*A), d[del_row], d[row], A->cols, beta);
+      // oaxpy(om_P(*A), om_P(*A), d[del_row], d[row], cols, beta);
       sched_push(S, d[del_row], d[row], beta);
     }
   }
@@ -316,26 +343,21 @@ octmat precode_matrix_gen(params *P, int overhead) {
 }
 
 schedule *precode_matrix_invert(params *P, octmat *A) {
-  int rows = A->rows, cols = A->cols;
+  int rows = A->rows, cols = A->cols, vp = 0;
   schedule *S = sched_new(rows, cols, P->L * P->L / 5);
 
-  // defer the hdpc rows
-  for (int l = 0; l < P->H; l++) {
-    TMPSWAP(int, S->d[l + P->S], S->d[A->rows - P->H + l]);
+  // roll precode matrix to put G_ENC rows on top
+  for (int row = 0; row < rows; row++) {
+    S->d[row] = (row + P->S + P->H) % rows;
   }
 
-  // bring the eye block between ldpc blocks to front
-  for (int l = 0; l < P->S; l++) {
-    TMPSWAP(int, S->c[l], S->c[P->B + l]);
-  }
-
-  if (!decode_amd(P, A, S)) {
+  if (!decode_amd(P, A, S, &vp)) {
     om_destroy(A);
     sched_free(S);
     return NULL;
   }
 
-  if (!decode_solve(P, A, S)) {
+  if (!decode_solve(P, A, S, vp)) {
     om_destroy(A);
     sched_free(S);
     return NULL;
