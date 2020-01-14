@@ -324,7 +324,7 @@ static bool decode_solve(params *P, wrkmat *A, schedule *S, int row_start) {
     }
   }
 
-  for (int row = P->L - 1; row >= 0; row--) {
+  for (int row = P->L - 1; row >= row_start; row--) {
     for (int del_row = 0; del_row < row; del_row++) {
       beta = wrkmat_at(A, d[del_row], c[row]);
       if (beta == 0)
