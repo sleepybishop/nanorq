@@ -12,13 +12,6 @@ CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64
 CFLAGS   = -O3 -g -std=c99 -Wall -I. -Ioblas
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline
 
-# for google perf tools
-#LDFLAGS += -lprofiler -ltcmalloc
-
-# for gcov
-#CFLAGS  += -fprofile-arcs -ftest-coverage
-#LDFLAGS += -lgcov --coverage
-
 all: test libnanorq.a
 
 test: encode decode
@@ -65,13 +58,20 @@ profile:
 	valgrind --tool=callgrind ./benchmark 1280 1000 5.0
 	gprof2dot --format=callgrind callgrind.out.* -z main | dot -T svg > callgrind.svg
 
-gperf:
+gcov: CFLAGS += -O0 -fprofile-arcs -ftest-coverage
+gcov: LDFLAGS = -lgcov --coverage
+gcov: clean benchmark
+	./benchmark 1280 1000 5.0
+
+gperf: LDFLAGS = -lprofiler -ltcmalloc
+gperf: clean benchmark
 	CPUPROFILE_FREQUENCY=100000 CPUPROFILE=gperf.prof ./benchmark 1280 5000 5.0
 	pprof ./benchmark gperf.prof --callgrind > callgrind.gperf
 	gprof2dot --format=callgrind callgrind.gperf -z main | dot -T svg > gperf.svg
 #	pprof ./encode gperf.prof --text
 
-gheap:
+gheap: LDFLAGS = -lprofiler -ltcmalloc
+gheap: clean benchmark
 	$(RM) gmem.prof.*
 	HEAPPROFILE=gmem.prof HEAP_PROFILE_INUSE_INTERVAL=1024000 ./benchmark 1280 1000 5.0
 	pprof ./benchmark gmem.prof.*.heap --callgrind > memgrind.gperf
