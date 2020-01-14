@@ -91,8 +91,11 @@ static octmat precode_matrix_make_HDPC(params *P) {
   octmat MTxGAMMA = OM_INITIAL;
   om_resize(&MTxGAMMA, m, n);
 
-  uint8_t gv[n];
+  uint8_t gv[2 * n];
   for (int col = 0; col < n; col++) {
+    gv[col] = 0;
+  }
+  for (int col = n; col < 2 * n; col++) {
     gv[col] = OCT_EXP[col % OCT_EXP_SIZE];
   }
 
@@ -100,10 +103,7 @@ static octmat precode_matrix_make_HDPC(params *P) {
   for (int row = 0; row < m; row++, cp += MTxGAMMA.cols_al) {
     ap = om_P(MT) + (row * MT.cols_al);
     for (int idx = 0; idx < n; idx++) {
-      uint8_t tmp[n];
-      for (int col = 0; col < n; col++)
-        tmp[col] = (col > idx) ? 0 : gv[idx - col];
-      oaxpy(cp, tmp, 0, 0, n, ap[idx]);
+      oaxpy(cp, gv + idx, 0, 0, n, ap[idx]);
     }
   }
 
