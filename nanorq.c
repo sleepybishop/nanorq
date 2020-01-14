@@ -157,7 +157,7 @@ static struct encoder_core *nanorq_block_encoder(nanorq *rq, uint8_t sbn) {
 }
 
 bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
-  octmat A = OM_INITIAL, D = OM_INITIAL;
+  octmat D = OM_INITIAL;
 
   struct encoder_core *enc = nanorq_block_encoder(rq, sbn);
   params *P = NULL;
@@ -195,8 +195,8 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
     }
   }
 
-  A = precode_matrix_gen(P, 0);
-  if (!precode_matrix_intermediate1(P, &A, &D)) {
+  wrkmat *A = precode_matrix_gen(P, 0);
+  if (!precode_matrix_intermediate1(P, A, &D)) {
     return false;
   }
   enc->D = D;

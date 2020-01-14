@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <gf2.h>
 #include <kvec.h>
 #include <octmat.h>
+#include <wrkmat.h>
 
 #define div_ceil(A, B) ((A) / (B) + ((A) % (B) ? 1 : 0))
 #define div_floor(A, B) ((A) / (B))

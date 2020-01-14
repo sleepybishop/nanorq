@@ -32,38 +32,38 @@ static void precode_matrix_apply_sched(octmat *D, schedule *S) {
   }
 }
 
-static void precode_matrix_init_LDPC1(octmat *A, uint16_t S, uint16_t B) {
+static void precode_matrix_make_LDPC1(wrkmat *A, int S, int B) {
   int row, col;
   for (row = 0; row < S; row++) {
     for (col = 0; col < B; col++) {
       uint16_t submtx = col / S;
       if ((row == (col % S)) || (row == (col + submtx + 1) % S) ||
           (row == (col + 2 * (submtx + 1)) % S)) {
-        om_A((*A), row, col) = 1;
+        wrkmat_set(A, row, col, 1);
       }
     }
   }
 }
 
-static void precode_matrix_init_LDPC2(octmat *A, uint16_t skip, uint16_t rows,
+static void precode_matrix_make_LDPC2(wrkmat *A, uint16_t skip, uint16_t rows,
                                       uint16_t cols) {
   for (int row = 0; row < rows; row++) {
     uint16_t start = row % cols;
     for (int col = 0; col < cols; col++) {
       uint8_t val = (col == start || col == (start + 1) % cols) > 0;
-      om_A((*A), row, skip + col) = val;
+      wrkmat_set(A, row, skip + col, val);
     }
   }
 }
 
-static void precode_matrix_add_identity(octmat *A, uint16_t size,
-                                        uint16_t skip_row, uint16_t skip_col) {
+static void precode_matrix_make_identity(wrkmat *A, int size, int skip_row,
+                                         int skip_col) {
   for (int diag = 0; diag < size; diag++) {
-    om_A((*A), skip_row + diag, skip_col + diag) = 1;
+    wrkmat_set(A, skip_row + diag, skip_col + diag, 1);
   }
 }
 
-static octmat precode_matrix_make_MT(uint16_t rows, uint16_t cols) {
+static octmat precode_matrix_make_MT(int rows, int cols) {
   octmat MT = OM_INITIAL;
   om_resize(&MT, rows, cols);
 
@@ -83,12 +83,9 @@ static octmat precode_matrix_make_MT(uint16_t rows, uint16_t cols) {
   return MT;
 }
 
-static void precode_matrix_init_HDPC(params *P, octmat *A) {
-  uint16_t m = P->H;
-  uint16_t n = P->Kprime + P->S;
-
-  if (m == 0 || n == 0)
-    return;
+static octmat precode_matrix_make_HDPC(params *P) {
+  int m = P->H;
+  int n = P->Kprime + P->S;
 
   octmat MT = precode_matrix_make_MT(m, n);
   octmat MTxGAMMA = OM_INITIAL;
@@ -100,7 +97,7 @@ static void precode_matrix_init_HDPC(params *P, octmat *A) {
   }
 
   uint8_t *ap, *cp = om_P(MTxGAMMA);
-  for (int row = 0; row < m; row++, cp += MT.cols_al) {
+  for (int row = 0; row < m; row++, cp += MTxGAMMA.cols_al) {
     ap = om_P(MT) + (row * MT.cols_al);
     for (int idx = 0; idx < n; idx++) {
       uint8_t tmp[n];
@@ -110,92 +107,100 @@ static void precode_matrix_init_HDPC(params *P, octmat *A) {
     }
   }
 
-  int row, col;
-  for (col = 0; col < n; col++) {
-    for (row = 0; row < m; row++) {
-      om_A(*A, P->S + row, col) = om_A(MTxGAMMA, row, col);
-    }
-  }
   om_destroy(&MT);
-  om_destroy(&MTxGAMMA);
+  return MTxGAMMA;
 }
 
-static void precode_matrix_add_G_ENC(params *P, octmat *A) {
+static void precode_matrix_make_G_ENC(wrkmat *A, params *P) {
   for (int row = P->S + P->H; row < P->L; row++) {
     uint32_t isi = (row - P->S) - P->H;
     uint16_vec idxs = params_get_idxs(isi, P);
     for (int idx = 0; idx < kv_size(idxs); idx++) {
-      om_A(*A, row, kv_A(idxs, idx)) = 1;
+      wrkmat_set(A, row, kv_A(idxs, idx), 1);
     }
     kv_destroy(idxs);
   }
 }
 
-static void decode_patch(params *P, octmat *A, struct bitmask *mask,
+wrkmat *precode_matrix_gen(params *P, int overhead) {
+  wrkmat *A = wrkmat_new(P->L + overhead, P->L);
+
+  precode_matrix_make_LDPC1(A, P->S, P->B);
+  precode_matrix_make_identity(A, P->S, 0, P->B);
+  precode_matrix_make_LDPC2(A, P->W, P->S, P->P);
+  precode_matrix_make_G_ENC(A, P);
+  precode_matrix_make_identity(A, P->H, P->S, P->L - P->H);
+
+  octmat HDPC = precode_matrix_make_HDPC(P);
+  wrkmat_assign_block(A, &HDPC, P->S, 0, P->H, P->Kprime + P->S);
+
+  return A;
+}
+
+static void decode_patch(params *P, wrkmat *A, struct bitmask *mask,
                          repair_vec *repair_bin, uint16_t num_symbols,
                          uint16_t overhead) {
-
   size_t padding = P->Kprime - num_symbols;
-  uint16_t num_gaps = bitmask_gaps(mask, num_symbols);
-  uint16_t rep_idx = 0;
+  int num_gaps = bitmask_gaps(mask, num_symbols);
+  int rep_idx = 0;
   for (int gap = 0; gap < P->L && num_gaps > 0; gap++) {
     if (bitmask_check(mask, gap))
       continue;
-    uint16_t row = gap + P->H + P->S;
+    int row = gap + P->H + P->S;
     for (int col = 0; col < A->cols; col++) {
-      om_A(*A, row, col) = 0;
+      wrkmat_set(A, row, col, 0);
     }
 
     uint16_vec idxs =
         params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
     for (int idx = 0; idx < kv_size(idxs); idx++) {
-      om_A(*A, row, kv_A(idxs, idx)) = 1;
+      wrkmat_set(A, row, kv_A(idxs, idx), 1);
     }
     kv_destroy(idxs);
     num_gaps--;
   }
 
-  int rep_row = (uint16_t)(A->rows - overhead);
+  int rep_row = P->L;
   for (; rep_row < A->rows; rep_row++) {
     for (int col = 0; col < A->cols; col++) {
-      om_A(*A, rep_row, col) = 0;
+      wrkmat_set(A, rep_row, col, 0);
     }
     uint16_vec idxs =
         params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
     for (int idx = 0; idx < kv_size(idxs); idx++) {
-      om_A(*A, rep_row, kv_A(idxs, idx)) = 1;
+      wrkmat_set(A, rep_row, kv_A(idxs, idx), 1);
     }
     kv_destroy(idxs);
   }
 }
 
-static int decode_nnz(octmat *A, int row, int s, int e, int c[], int d[]) {
+static int decode_nnz(wrkmat *A, int row, int s, int e, int c[], int d[]) {
   int nz = 0;
   for (int col = s; col < e; col++) {
-    nz += (om_A(*A, d[row], c[col]) > 0);
+    nz += (wrkmat_at(A, d[row], c[col]) > 0);
   }
   return nz;
 }
 
-static int decode_nz_fwd(octmat *A, int row, int s, int e, int c[], int d[]) {
+static int decode_nz_fwd(wrkmat *A, int row, int s, int e, int c[], int d[]) {
   for (int col = s; col < e; col++) {
-    int tmp = om_A(*A, d[row], c[col]);
+    int tmp = wrkmat_at(A, d[row], c[col]);
     if (tmp > 0)
       return col;
   }
   return e;
 }
 
-static int decode_nz_rev(octmat *A, int row, int s, int e, int c[], int d[]) {
+static int decode_nz_rev(wrkmat *A, int row, int s, int e, int c[], int d[]) {
   for (int col = e - 1; col >= s; col--) {
-    int tmp = om_A(*A, d[row], c[col]);
+    int tmp = wrkmat_at(A, d[row], c[col]);
     if (tmp == 0)
       return col;
   }
   return s;
 }
 
-static void decode_rear_swap(octmat *A, int row, int s, int e, int c[],
+static void decode_rear_swap(wrkmat *A, int row, int s, int e, int c[],
                              int d[]) {
   while (s < e) {
     int swap1 = decode_nz_fwd(A, row, s, e, c, d);
@@ -212,7 +217,7 @@ static void decode_rear_swap(octmat *A, int row, int s, int e, int c[],
   }
 }
 
-static bool decode_amd(params *P, octmat *A, schedule *S, int *vp) {
+static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
   int i = 0, u = P->P, *c = S->c, *d = S->d;
   int rows = A->rows, cols = A->cols;
 
@@ -241,26 +246,26 @@ static bool decode_amd(params *P, octmat *A, schedule *S, int *vp) {
       TMPSWAP(int, d[V0], d[chosen]);
     }
     // find first one
-    if (om_A(*A, d[V0], c[V0]) == 0) {
+    if (wrkmat_at(A, d[V0], c[V0]) == 0) {
       int first = decode_nz_fwd(A, V0, V0 + 1, V0 + Vcols, c, d);
       TMPSWAP(int, c[V0], c[first]);
     }
     decode_rear_swap(A, V0, V0 + 1, V0 + Vcols, c, d);
     // decrement nz counts if row had nz at V0 or nz's at last r - 1 cols
     for (int row = V0 + 1; row < rows; row++) {
-      if (om_A(*A, d[row], c[V0])) {
+      if (wrkmat_at(A, d[row], c[V0])) {
         counts[d[row]]--;
       }
       for (int col = 0; col < (r - 1); col++) {
-        if (om_A(*A, d[row], c[V0 + Vcols - col - 1])) {
+        if (wrkmat_at(A, d[row], c[V0 + Vcols - col - 1])) {
           counts[d[row]]--;
         }
       }
     }
     for (int row = 1; row < Vrows; row++) {
-      uint8_t beta = om_A(*A, d[V0 + row], c[V0]);
+      uint8_t beta = wrkmat_at(A, d[V0 + row], c[V0]);
       if (beta != 0) {
-        oaxpy(om_P(*A), om_P(*A), d[V0 + row], d[V0], A->cols, beta);
+        wrkmat_axpy(A, d[V0 + row], d[V0], beta);
         sched_push(S, d[V0 + row], d[V0], beta);
       }
     }
@@ -271,7 +276,7 @@ static bool decode_amd(params *P, octmat *A, schedule *S, int *vp) {
   return true;
 }
 
-static bool decode_solve(params *P, octmat *A, schedule *S, int row_start) {
+static bool decode_solve(params *P, wrkmat *A, schedule *S, int row_start) {
   int rows = A->rows, cols = A->cols;
   int *c = S->c, *d = S->d;
   uint8_t beta;
@@ -285,7 +290,7 @@ static bool decode_solve(params *P, octmat *A, schedule *S, int row_start) {
     }
 
     for (; nzrow < rows; nzrow++) {
-      beta = om_A(*A, d[nzrow], c[row]);
+      beta = wrkmat_at(A, d[nzrow], c[row]);
       if (beta != 0) {
         break;
       }
@@ -299,27 +304,27 @@ static bool decode_solve(params *P, octmat *A, schedule *S, int row_start) {
       TMPSWAP(int, d[row], d[nzrow]);
     }
 
-    beta = om_A(*A, d[row], c[row]);
+    beta = wrkmat_at(A, d[row], c[row]);
     if (beta > 1) {
-      oscal(om_P(*A), d[row], cols, OCT_INV[beta]);
+      wrkmat_scal(A, d[row], OCT_INV[beta]);
       sched_push(S, d[row], OCT_INV[beta], 0);
     }
 
     for (int del_row = row + 1; del_row < rows; del_row++) {
-      beta = om_A(*A, d[del_row], c[row]);
+      beta = wrkmat_at(A, d[del_row], c[row]);
       if (beta == 0)
         continue;
-      oaxpy(om_P(*A), om_P(*A), d[del_row], d[row], cols, beta);
+      wrkmat_axpy(A, d[del_row], d[row], beta);
       sched_push(S, d[del_row], d[row], beta);
     }
   }
 
   for (int row = P->L - 1; row >= 0; row--) {
     for (int del_row = 0; del_row < row; del_row++) {
-      beta = om_A(*A, d[del_row], c[row]);
+      beta = wrkmat_at(A, d[del_row], c[row]);
       if (beta == 0)
         continue;
-      // oaxpy(om_P(*A), om_P(*A), d[del_row], d[row], cols, beta);
+      // wrkmat_axpy(A, d[del_row], d[row], beta);
       sched_push(S, d[del_row], d[row], beta);
     }
   }
@@ -327,22 +332,7 @@ static bool decode_solve(params *P, octmat *A, schedule *S, int row_start) {
   return true;
 }
 
-octmat precode_matrix_gen(params *P, int overhead) {
-  octmat A = OM_INITIAL;
-  om_resize(&A, P->L + overhead, P->L);
-
-  precode_matrix_init_LDPC1(&A, P->S, P->B);
-  precode_matrix_add_identity(&A, P->S, 0, P->B);
-  precode_matrix_init_LDPC2(&A, P->W, P->S, P->P);
-
-  precode_matrix_init_HDPC(P, &A);
-  precode_matrix_add_identity(&A, P->H, P->S, P->L - P->H);
-  precode_matrix_add_G_ENC(P, &A);
-
-  return A;
-}
-
-schedule *precode_matrix_invert(params *P, octmat *A) {
+schedule *precode_matrix_invert(params *P, wrkmat *A) {
   int rows = A->rows, cols = A->cols, vp = 0;
   schedule *S = sched_new(rows, cols, P->L * P->L / 5);
 
@@ -352,22 +342,22 @@ schedule *precode_matrix_invert(params *P, octmat *A) {
   }
 
   if (!decode_amd(P, A, S, &vp)) {
-    om_destroy(A);
+    wrkmat_free(A);
     sched_free(S);
     return NULL;
   }
 
   if (!decode_solve(P, A, S, vp)) {
-    om_destroy(A);
+    wrkmat_free(A);
     sched_free(S);
     return NULL;
   }
 
-  om_destroy(A);
+  wrkmat_free(A);
   return S;
 }
 
-bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D) {
+bool precode_matrix_intermediate1(params *P, wrkmat *A, octmat *D) {
   int rows = A->rows, cols = A->cols;
 
   schedule *S = precode_matrix_invert(P, A);
@@ -395,7 +385,7 @@ void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr,
   kv_destroy(idxs);
 }
 
-bool precode_matrix_intermediate2(params *P, octmat *A, octmat *D, octmat *M,
+bool precode_matrix_intermediate2(params *P, wrkmat *A, octmat *D, octmat *M,
                                   repair_vec *repair_bin,
                                   struct bitmask *repair_mask, int num_symbols,
                                   int overhead) {
@@ -428,7 +418,6 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M,
                            struct bitmask *repair_mask) {
   int rep_idx, num_gaps, num_repair, overhead, skip = P->S + P->H;
   int num_symbols = P->K;
-  octmat A = OM_INITIAL;
 
   num_repair = kv_size(*repair_bin);
   num_gaps = bitmask_gaps(repair_mask, num_symbols);
@@ -467,8 +456,8 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M,
     ocopy(om_P(*D), om_P(rs.row), row, 0, D->cols);
   }
 
-  A = precode_matrix_gen(P, overhead);
+  wrkmat *A = precode_matrix_gen(P, overhead);
   bool precode_ok = precode_matrix_intermediate2(
-      P, &A, D, M, repair_bin, repair_mask, num_symbols, overhead);
+      P, A, D, M, repair_bin, repair_mask, num_symbols, overhead);
   return precode_ok;
 }

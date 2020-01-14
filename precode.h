@@ -4,10 +4,10 @@
 #include "bitmask.h"
 #include "params.h"
 
-octmat precode_matrix_gen(params *P, int overhead);
+wrkmat *precode_matrix_gen(params *P, int overhead);
 
-bool precode_matrix_intermediate1(params *P, octmat *A, octmat *D);
-bool precode_matrix_intermediate2(params *P, octmat *A, octmat *D, octmat *M,
+bool precode_matrix_intermediate1(params *P, wrkmat *A, octmat *D);
+bool precode_matrix_intermediate2(params *P, wrkmat *A, octmat *D, octmat *M,
                                   repair_vec *repair_bin, struct bitmask *mask,
                                   int num_symbols, int overhead);
 
