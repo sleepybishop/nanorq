@@ -252,21 +252,26 @@ static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
     }
     decode_rear_swap(A, V0, V0 + 1, V0 + Vcols, c, d);
     // decrement nz counts if row had nz at V0 or nz's at last r - 1 cols
+    int nzval[rows], nztst[rows];
     for (int row = V0 + 1; row < rows; row++) {
-      if (wrkmat_at(A, d[row], c[V0])) {
-        counts[d[row]]--;
-      }
+      nzval[row] = wrkmat_at(A, d[row], c[V0]);
+    }
+    for (int row = V0 + 1; row < rows; row++) {
+      nztst[row] = nzval[row] > 0;
+    }
+    for (int row = V0 + 1; row < rows; row++) {
+      counts[d[row]] -= nztst[row];
       for (int col = 0; col < (r - 1); col++) {
         if (wrkmat_at(A, d[row], c[V0 + Vcols - col - 1])) {
           counts[d[row]]--;
         }
       }
     }
-    for (int row = 1; row < Vrows; row++) {
-      uint8_t beta = wrkmat_at(A, d[V0 + row], c[V0]);
-      if (beta != 0) {
-        wrkmat_axpy(A, d[V0 + row], d[V0], beta);
-        sched_push(S, d[V0 + row], d[V0], beta);
+    for (int row = V0 + 1; row < rows; row++) {
+      uint8_t beta = nzval[row];
+      if (nztst[row]) {
+        wrkmat_axpy(A, d[row], d[V0], beta);
+        sched_push(S, d[row], d[V0], beta);
       }
     }
     i++;
