@@ -84,17 +84,27 @@ struct memioctx {
 
 static size_t memio_read(struct ioctx *io, void *buf, int len) {
   struct memioctx *_io = (struct memioctx *)io;
-  if (_io->pos + len > _io->size)
-    return 0;
+  if (_io->pos + len > _io->size) {
+    int diff = _io->size - _io->pos;
+    memcpy(buf, _io->ptr + _io->pos, diff);
+    _io->pos = _io->size;
+    return diff;
+  }
   memcpy(buf, _io->ptr + _io->pos, len);
+  _io->pos += len;
   return len;
 }
 
 static size_t memio_write(struct ioctx *io, const void *buf, int len) {
   struct memioctx *_io = (struct memioctx *)io;
-  if (_io->pos + len > _io->size)
-    return 0;
+  if (_io->pos + len > _io->size) {
+    int diff = _io->size - _io->pos;
+    memcpy(_io->ptr + _io->pos, buf, diff);
+    _io->pos = _io->size;
+    return diff;
+  }
   memcpy(_io->ptr + _io->pos, buf, len);
+  _io->pos += len;
   return len;
 }
 
