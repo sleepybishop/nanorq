@@ -364,6 +364,8 @@ schedule *precode_matrix_invert(params *P, wrkmat *A) {
 
 bool precode_matrix_intermediate1(params *P, wrkmat *A, octmat *D) {
   int rows = A->rows, cols = A->cols;
+  if (rows <= 0)
+    return false;
 
   schedule *S = precode_matrix_invert(P, A);
   if (S == NULL)

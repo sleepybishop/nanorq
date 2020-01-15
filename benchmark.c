@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 #include <time.h>
 
@@ -141,18 +142,20 @@ int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
   int num_sbn = objsize / (num_packets * packet_size);
   if (num_sbn > 256)
     num_sbn = 256;
-  uint64_t oti_common;
-  uint32_t oti_scheme;
+  uint64_t oti_common = 0;
+  uint32_t oti_scheme = 0;
   struct ioctx *myio;
 
   uint64_t sz = num_packets * packet_size * num_sbn;
-  uint8_t *in = malloc(sz);
-  uint8_t *out = malloc(sz);
+  uint8_t *in = calloc(1, sz);
+  uint8_t *out = calloc(1, sz);
   random_bytes(in, sz);
 
   myio = ioctx_from_mem(in, sz);
   if (!myio) {
     fprintf(stderr, "couldnt access mem at %p\n", in);
+    free(in);
+    free(out);
     return -1;
   }
 
@@ -179,6 +182,9 @@ int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
   myio = ioctx_from_mem(out, sz);
   if (!myio) {
     fprintf(stderr, "couldnt access mem at %p\n", out);
+    free(in);
+    free(out);
+    kv_destroy(packets);
     return -1;
   }
 
