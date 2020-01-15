@@ -339,7 +339,7 @@ static bool decode_solve(params *P, wrkmat *A, schedule *S, int row_start) {
 
 schedule *precode_matrix_invert(params *P, wrkmat *A) {
   int rows = A->rows, cols = A->cols, vp = 0;
-  schedule *S = sched_new(rows, cols, P->L * P->L / 5);
+  schedule *S = sched_new(rows, cols, P->L);
 
   // roll precode matrix to put G_ENC rows on top
   for (int row = 0; row < rows; row++) {
