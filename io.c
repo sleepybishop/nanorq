@@ -12,45 +12,44 @@ struct fileioctx {
 };
 
 static size_t fileio_read(struct ioctx *io, void *buf, int len) {
-  struct fileioctx *fio = (struct fileioctx *)io;
-  return fread(buf, 1, len, fio->fp);
+  struct fileioctx *_io = (struct fileioctx *)io;
+  return fread(buf, 1, len, _io->fp);
 }
 
 static size_t fileio_write(struct ioctx *io, const void *buf, int len) {
-  struct fileioctx *fio = (struct fileioctx *)io;
-  return fwrite(buf, 1, len, fio->fp);
+  struct fileioctx *_io = (struct fileioctx *)io;
+  return fwrite(buf, 1, len, _io->fp);
 }
 
 static int fileio_seek(struct ioctx *io, const int offset) {
-  struct fileioctx *fio = (struct fileioctx *)io;
-  return (fseek(fio->fp, offset, SEEK_SET) == 0);
+  struct fileioctx *_io = (struct fileioctx *)io;
+  return (fseek(_io->fp, offset, SEEK_SET) == 0);
 }
 
 static long fileio_tell(struct ioctx *io) {
-  struct fileioctx *fio = (struct fileioctx *)io;
-  return ftell(fio->fp);
+  struct fileioctx *_io = (struct fileioctx *)io;
+  return ftell(_io->fp);
 }
 
 static void fileio_destroy(struct ioctx *io) {
-  struct fileioctx *fio = (struct fileioctx *)io;
-  fclose(fio->fp);
-  free(fio);
+  struct fileioctx *_io = (struct fileioctx *)io;
+  fclose(_io->fp);
+  free(_io);
   return;
 }
 
 static size_t fileio_size(struct ioctx *io) {
-  struct fileioctx *fio = (struct fileioctx *)io;
+  struct fileioctx *_io = (struct fileioctx *)io;
   long ret = 0;
-  long pos = ftell(fio->fp);
-  fseek(fio->fp, 0, SEEK_END);
-  ret = ftell(fio->fp);
-  fseek(fio->fp, pos, SEEK_SET);
+  long pos = ftell(_io->fp);
+  fseek(_io->fp, 0, SEEK_END);
+  ret = ftell(_io->fp);
+  fseek(_io->fp, pos, SEEK_SET);
   return ret;
 }
 
 struct ioctx *ioctx_from_file(const char *fn, int t) {
-  struct fileioctx *ret = NULL;
-
+  struct fileioctx *_io = NULL;
   FILE *fp;
 
   if (t) {
@@ -62,18 +61,18 @@ struct ioctx *ioctx_from_file(const char *fn, int t) {
   if (!fp)
     return NULL;
 
-  ret = calloc(1, sizeof(struct fileioctx));
-  ret->fp = fp;
+  _io = calloc(1, sizeof(struct fileioctx));
+  _io->fp = fp;
 
-  ret->io.read = fileio_read;
-  ret->io.write = fileio_write;
-  ret->io.seek = fileio_seek;
-  ret->io.size = fileio_size;
-  ret->io.tell = fileio_tell;
-  ret->io.destroy = fileio_destroy;
-  ret->io.seekable = true;
+  _io->io.read = fileio_read;
+  _io->io.write = fileio_write;
+  _io->io.seek = fileio_seek;
+  _io->io.size = fileio_size;
+  _io->io.tell = fileio_tell;
+  _io->io.destroy = fileio_destroy;
+  _io->io.seekable = true;
 
-  return (struct ioctx *)ret;
+  return (struct ioctx *)_io;
 }
 
 struct memioctx {
@@ -84,60 +83,60 @@ struct memioctx {
 };
 
 static size_t memio_read(struct ioctx *io, void *buf, int len) {
-  struct memioctx *mio = (struct memioctx *)io;
-  if (mio->pos + len > mio->size)
+  struct memioctx *_io = (struct memioctx *)io;
+  if (_io->pos + len > _io->size)
     return 0;
-  memcpy(buf, mio->ptr + mio->pos, len);
+  memcpy(buf, _io->ptr + _io->pos, len);
   return len;
 }
 
 static size_t memio_write(struct ioctx *io, const void *buf, int len) {
-  struct memioctx *mio = (struct memioctx *)io;
-  if (mio->pos + len > mio->size)
+  struct memioctx *_io = (struct memioctx *)io;
+  if (_io->pos + len > _io->size)
     return 0;
-  memcpy(mio->ptr + mio->pos, buf, len);
+  memcpy(_io->ptr + _io->pos, buf, len);
   return len;
 }
 
 static int memio_seek(struct ioctx *io, const int offset) {
-  struct memioctx *mio = (struct memioctx *)io;
-  if (offset >= mio->size)
+  struct memioctx *_io = (struct memioctx *)io;
+  if (offset >= _io->size)
     return false;
-  mio->pos = offset;
+  _io->pos = offset;
   return true;
 }
 
 static long memio_tell(struct ioctx *io) {
-  struct memioctx *mio = (struct memioctx *)io;
-  return mio->pos;
+  struct memioctx *_io = (struct memioctx *)io;
+  return _io->pos;
 }
 
 static void memio_destroy(struct ioctx *io) {
-  struct memioctx *mio = (struct memioctx *)io;
-  free(mio);
+  struct memioctx *_io = (struct memioctx *)io;
+  free(_io);
   return;
 }
 
 static size_t memio_size(struct ioctx *io) {
-  struct memioctx *mio = (struct memioctx *)io;
-  return mio->size;
+  struct memioctx *_io = (struct memioctx *)io;
+  return _io->size;
 }
 
 struct ioctx *ioctx_from_mem(const uint8_t *ptr, size_t sz) {
-  struct memioctx *ret = NULL;
+  struct memioctx *_io = NULL;
 
-  ret = calloc(1, sizeof(struct memioctx));
-  ret->ptr = (uint8_t *)ptr;
-  ret->pos = 0;
-  ret->size = sz;
+  _io = calloc(1, sizeof(struct memioctx));
+  _io->ptr = (uint8_t *)ptr;
+  _io->pos = 0;
+  _io->size = sz;
 
-  ret->io.read = memio_read;
-  ret->io.write = memio_write;
-  ret->io.seek = memio_seek;
-  ret->io.size = memio_size;
-  ret->io.tell = memio_tell;
-  ret->io.destroy = memio_destroy;
-  ret->io.seekable = true;
+  _io->io.read = memio_read;
+  _io->io.write = memio_write;
+  _io->io.seek = memio_seek;
+  _io->io.size = memio_size;
+  _io->io.tell = memio_tell;
+  _io->io.destroy = memio_destroy;
+  _io->io.seekable = true;
 
-  return (struct ioctx *)ret;
+  return (struct ioctx *)_io;
 }
