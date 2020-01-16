@@ -1,6 +1,9 @@
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -11,17 +14,17 @@ struct fileioctx {
   FILE *fp;
 };
 
-static size_t fileio_read(struct ioctx *io, void *buf, int len) {
+static size_t fileio_read(struct ioctx *io, void *buf, size_t len) {
   struct fileioctx *_io = (struct fileioctx *)io;
   return fread(buf, 1, len, _io->fp);
 }
 
-static size_t fileio_write(struct ioctx *io, const void *buf, int len) {
+static size_t fileio_write(struct ioctx *io, const void *buf, size_t len) {
   struct fileioctx *_io = (struct fileioctx *)io;
   return fwrite(buf, 1, len, _io->fp);
 }
 
-static int fileio_seek(struct ioctx *io, const int offset) {
+static bool fileio_seek(struct ioctx *io, const size_t offset) {
   struct fileioctx *_io = (struct fileioctx *)io;
   return (fseek(_io->fp, offset, SEEK_SET) == 0);
 }
@@ -71,6 +74,7 @@ struct ioctx *ioctx_from_file(const char *fn, int t) {
   _io->io.tell = fileio_tell;
   _io->io.destroy = fileio_destroy;
   _io->io.seekable = true;
+  _io->io.writable = (t == 0);
 
   return (struct ioctx *)_io;
 }
@@ -82,10 +86,10 @@ struct memioctx {
   size_t size;
 };
 
-static size_t memio_read(struct ioctx *io, void *buf, int len) {
+static size_t memio_read(struct ioctx *io, void *buf, size_t len) {
   struct memioctx *_io = (struct memioctx *)io;
   if (_io->pos + len > _io->size) {
-    int diff = _io->size - _io->pos;
+    size_t diff = _io->size - _io->pos;
     memcpy(buf, _io->ptr + _io->pos, diff);
     _io->pos = _io->size;
     return diff;
@@ -95,10 +99,10 @@ static size_t memio_read(struct ioctx *io, void *buf, int len) {
   return len;
 }
 
-static size_t memio_write(struct ioctx *io, const void *buf, int len) {
+static size_t memio_write(struct ioctx *io, const void *buf, size_t len) {
   struct memioctx *_io = (struct memioctx *)io;
   if (_io->pos + len > _io->size) {
-    int diff = _io->size - _io->pos;
+    size_t diff = _io->size - _io->pos;
     memcpy(_io->ptr + _io->pos, buf, diff);
     _io->pos = _io->size;
     return diff;
@@ -108,7 +112,7 @@ static size_t memio_write(struct ioctx *io, const void *buf, int len) {
   return len;
 }
 
-static int memio_seek(struct ioctx *io, const int offset) {
+static bool memio_seek(struct ioctx *io, const size_t offset) {
   struct memioctx *_io = (struct memioctx *)io;
   if (offset >= _io->size)
     return false;
