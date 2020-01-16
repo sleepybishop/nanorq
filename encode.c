@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include <nanorq.h>
@@ -12,10 +13,11 @@ void dump_esi(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn,
   uint32_t fid = htobe32(nanorq_fid(sbn, esi));
   uint16_t packet_size = nanorq_symbol_size(rq);
   uint8_t data[packet_size];
+  memset(data, 0, packet_size);
   uint64_t written = nanorq_encode(rq, (void *)data, esi, sbn, myio);
 
   if (written != packet_size) {
-    fprintf(stderr, "failed to encode packet data for sbn %d esi %d.", sbn,
+    fprintf(stdout, "failed to encode packet data for sbn %d esi %d.", sbn,
             esi);
     abort();
   } else {
@@ -44,12 +46,12 @@ void dump_block(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn) {
     num_rep++;
   }
   nanorq_encode_cleanup(rq, sbn);
-  fprintf(stderr, "block %d is %d packets, dropped %d, created %d repair\n",
+  fprintf(stdout, "block %d is %d packets, dropped %d, created %d repair\n",
           sbn, num_esi, num_dropped, num_rep);
 }
 
 void usage(char *prog) {
-  fprintf(stderr, "usage:\n%s <filename> <packet_size>\n", prog);
+  fprintf(stdout, "usage:\n%s <filename> <packet_size>\n", prog);
   exit(1);
 }
 
@@ -60,7 +62,7 @@ int main(int argc, char *argv[]) {
   char *infile = argv[1];
   struct ioctx *myio = ioctx_from_file(infile, 1);
   if (!myio) {
-    fprintf(stderr, "couldnt access file %s\n", infile);
+    fprintf(stdout, "couldnt access file %s\n", infile);
     return -1;
   }
 
@@ -75,7 +77,7 @@ int main(int argc, char *argv[]) {
   nanorq *rq = nanorq_encoder_new(filesize, packet_size, align);
 
   if (rq == NULL) {
-    fprintf(stderr, "Could not initialize encoder.\n");
+    fprintf(stdout, "Could not initialize encoder.\n");
     return -1;
   }
 

@@ -7,7 +7,7 @@
 #include <nanorq.h>
 
 void usage(char *prog) {
-  fprintf(stderr, "usage:\n%s <filename> <packet_size>\n", prog);
+  fprintf(stdout, "usage:\n%s <filename> <packet_size>\n", prog);
   exit(1);
 }
 
@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
   char *outfile = argv[1];
   struct ioctx *myio = ioctx_from_file(outfile, 0);
   if (!myio) {
-    fprintf(stderr, "couldnt access file %s\n", outfile);
+    fprintf(stdout, "couldnt access file %s\n", outfile);
     return -1;
   }
 
@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
 
   nanorq *rq = nanorq_decoder_new(oti_common, oti_scheme);
   if (rq == NULL) {
-    fprintf(stderr, "Could not initialize decoder.\n");
+    fprintf(stdout, "Could not initialize decoder.\n");
     return -1;
   }
 
@@ -46,16 +46,16 @@ int main(int argc, char *argv[]) {
     fid = be32toh(fid);
     fread(packet, packet_size, 1, ih);
     if (!nanorq_decoder_add_symbol(rq, (void *)packet, fid, myio)) {
-      fprintf(stderr, "adding symbol %d failed.\n", fid);
+      fprintf(stdout, "adding symbol %d failed.\n", fid);
       abort();
     }
   }
   for (int sbn = 0; sbn < num_sbn; sbn++) {
-    fprintf(stderr, "block %d is %d packets, lost %d, have %d repair\n", sbn,
+    fprintf(stdout, "block %d is %d packets, lost %d, have %d repair\n", sbn,
             nanorq_block_symbols(rq, sbn), nanorq_num_missing(rq, sbn),
             nanorq_num_repair(rq, sbn));
     if (!nanorq_repair_block(rq, myio, sbn)) {
-      fprintf(stderr, "decode of sbn %d failed.\n", sbn);
+      fprintf(stdout, "decode of sbn %d failed.\n", sbn);
     }
     nanorq_decode_cleanup(rq, sbn);
   }
