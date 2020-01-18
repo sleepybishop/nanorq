@@ -6,6 +6,7 @@ precode.o\
 rand.o\
 sched.o\
 tuple.o\
+wrkmat.o\
 nanorq.o
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
