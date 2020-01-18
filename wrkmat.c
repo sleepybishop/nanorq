@@ -56,3 +56,11 @@ void wrkmat_axpy(wrkmat *w, int i, int j, int beta) {
 void wrkmat_scal(wrkmat *w, int i, int beta) {
   oscal(om_P(w->A), i, w->cols, beta);
 }
+
+int wrkmat_nnz(wrkmat *w, int i, int s, int e) {
+  int nz = 0;
+  for (int col = s; col < e; col++) {
+    nz += (om_A(w->A, i, col) > 0);
+  }
+  return nz;
+}

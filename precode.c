@@ -174,17 +174,9 @@ static void decode_patch(params *P, wrkmat *A, struct bitmask *mask,
   }
 }
 
-static int decode_nnz(wrkmat *A, int row, int s, int e, int c[], int d[]) {
-  int nz = 0;
-  for (int col = s; col < e; col++) {
-    nz += (wrkmat_at(A, d[row], c[col]) > 0);
-  }
-  return nz;
-}
-
 static int decode_nz_fwd(wrkmat *A, int row, int s, int e, int c[], int d[]) {
   for (int col = s; col < e; col++) {
-    int tmp = wrkmat_at(A, d[row], c[col]);
+    int tmp = wrkmat_chk(A, d[row], c[col]);
     if (tmp > 0)
       return col;
   }
@@ -193,7 +185,7 @@ static int decode_nz_fwd(wrkmat *A, int row, int s, int e, int c[], int d[]) {
 
 static int decode_nz_rev(wrkmat *A, int row, int s, int e, int c[], int d[]) {
   for (int col = e - 1; col >= s; col--) {
-    int tmp = wrkmat_at(A, d[row], c[col]);
+    int tmp = wrkmat_chk(A, d[row], c[col]);
     if (tmp == 0)
       return col;
   }
@@ -223,7 +215,7 @@ static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
 
   int counts[rows];
   for (int row = 0; row < rows; row++) {
-    counts[d[row]] = decode_nnz(A, row, 0, cols - u, c, d);
+    counts[d[row]] = wrkmat_nnz(A, d[row], 0, cols - u);
   }
 
   while (i + u < P->L) {
@@ -246,7 +238,7 @@ static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
       TMPSWAP(int, d[V0], d[chosen]);
     }
     // find first one
-    if (wrkmat_at(A, d[V0], c[V0]) == 0) {
+    if (wrkmat_chk(A, d[V0], c[V0]) == 0) {
       int first = decode_nz_fwd(A, V0, V0 + 1, V0 + Vcols, c, d);
       TMPSWAP(int, c[V0], c[first]);
     }
@@ -254,9 +246,9 @@ static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
     // decrement nz counts if row had nz at V0 or nz's at last r - 1 cols
     for (int row = V0 + 1; row < rows - P->H; row++) {
       for (int col = 0; col < (r - 1); col++) {
-        counts[d[row]] -= !!wrkmat_at(A, d[row], c[V0 + Vcols - col - 1]);
+        counts[d[row]] -= !!wrkmat_chk(A, d[row], c[V0 + Vcols - col - 1]);
       }
-      uint8_t beta = wrkmat_at(A, d[row], c[V0]);
+      uint8_t beta = wrkmat_chk(A, d[row], c[V0]);
       if (beta) {
         counts[d[row]]--;
         wrkmat_axpy(A, d[row], d[V0], beta);

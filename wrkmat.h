@@ -14,6 +14,7 @@ typedef struct {
 } wrkmat;
 
 #define wrkmat_at(w, i, j) (om_A(w->A, i, j))
+#define wrkmat_chk(w, i, j) (!!om_A(w->A, i, j))
 
 wrkmat *wrkmat_new(int rows, int cols);
 void wrkmat_free(wrkmat *w);
@@ -25,5 +26,6 @@ void wrkmat_set(wrkmat *w, int i, int j, uint8_t b);
 
 void wrkmat_axpy(wrkmat *w, int i, int j, int beta);
 void wrkmat_scal(wrkmat *w, int i, int beta);
+int wrkmat_nnz(wrkmat *w, int i, int s, int e);
 
 #endif
