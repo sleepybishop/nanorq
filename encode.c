@@ -10,7 +10,7 @@
 
 void dump_esi(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn,
               uint32_t esi) {
-  uint32_t fid = htobe32(nanorq_fid(sbn, esi));
+  uint32_t tag = htobe32(nanorq_tag(sbn, esi));
   uint16_t packet_size = nanorq_symbol_size(rq);
   uint8_t data[packet_size];
   memset(data, 0, packet_size);
@@ -21,7 +21,7 @@ void dump_esi(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn,
             esi);
     abort();
   } else {
-    fwrite(&fid, 1, sizeof(fid), oh);
+    fwrite(&tag, 1, sizeof(tag), oh);
     fwrite(data, 1, packet_size, oh);
   }
 }

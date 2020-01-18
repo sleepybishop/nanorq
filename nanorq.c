@@ -306,9 +306,9 @@ uint32_t nanorq_oti_scheme_specific(nanorq *rq) {
   return ret;
 }
 
-uint32_t nanorq_fid(uint8_t sbn, uint32_t esi) {
+uint32_t nanorq_tag(uint8_t sbn, uint32_t esi) {
   uint32_t ret = (uint32_t)(sbn) << 24;
-  ret += esi % (uint32_t)(1 << 24);
+  ret |= esi & 0x00ffffff;
   return ret;
 }
 
@@ -500,10 +500,10 @@ uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io, uint8_t sbn,
   return written;
 }
 
-bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid,
+bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
                                struct ioctx *io) {
-  uint8_t sbn = fid >> 24;
-  uint32_t esi = (fid & 0x00ffffff);
+  uint8_t sbn = (tag >> 24) & 0xff;
+  uint32_t esi = (tag & 0x00ffffff);
 
   struct block_decoder *dec = nanorq_block_decoder(rq, sbn);
 

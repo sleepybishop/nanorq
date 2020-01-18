@@ -41,7 +41,7 @@ int nanorq_blocks(nanorq *rq);
 uint16_t nanorq_block_symbols(nanorq *rq, uint8_t sbn);
 
 // returns a compound symbol identifier comprised of sbn and esi
-uint32_t nanorq_fid(uint8_t sbn, uint32_t esi);
+uint32_t nanorq_tag(uint8_t sbn, uint32_t esi);
 
 // return the max number of repair symbols allowed
 uint32_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn);
@@ -57,7 +57,7 @@ void nanorq_encode_cleanup(nanorq *rq, uint8_t sbn);
 nanorq *nanorq_decoder_new(uint64_t common, uint32_t specific);
 
 // returns the success of adding a symbol to the decoder
-bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t fid,
+bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
                                struct ioctx *io);
 
 // returns number of symbol gaps in decoder for given block

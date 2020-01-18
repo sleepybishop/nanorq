@@ -12,7 +12,7 @@
 #include "kvec.h"
 
 struct sym {
-  uint32_t fid;
+  uint32_t tag;
   uint8_t *data;
 };
 
@@ -30,7 +30,7 @@ void random_bytes(uint8_t *buf, uint64_t len) {
   }
 }
 
-void dump_esi(nanorq *rq, struct ioctx *myio, int sbn, int esi,
+void dump_esi(nanorq *rq, struct ioctx *myio, int sbn, uint32_t esi,
               symvec *packets) {
   int packet_size = nanorq_symbol_size(rq);
   uint8_t *data = malloc(packet_size);
@@ -42,8 +42,8 @@ void dump_esi(nanorq *rq, struct ioctx *myio, int sbn, int esi,
             esi);
     abort();
   } else {
-    uint32_t fid = nanorq_fid(sbn, esi);
-    struct sym s = {.fid = fid, .data = data};
+    uint32_t tag = nanorq_tag(sbn, esi);
+    struct sym s = {.tag = tag, .data = data};
     kv_push(struct sym, *packets, s);
   }
 }
@@ -118,8 +118,9 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
 
   for (int i = 0; i < kv_size(*packets); i++) {
     struct sym s = kv_A(*packets, i);
-    if (!nanorq_decoder_add_symbol(rq, (void *)s.data, s.fid, myio)) {
-      fprintf(stderr, "adding symbol %d failed.\n", s.fid);
+    if (!nanorq_decoder_add_symbol(rq, (void *)s.data, s.tag, myio)) {
+      fprintf(stderr, "adding symbol %d to sbn %d failed.\n",
+              s.tag & 0x00ffffff, (s.tag >> 24) & 0xff);
       abort();
     }
   }
@@ -138,7 +139,7 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
 
 int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
   double elapsed;
-  uint64_t objsize = 128 * 1024 * 1024;
+  uint64_t objsize = 160 * 1024 * 1024;
   int num_sbn = objsize / (num_packets * packet_size);
   if (num_sbn > 256)
     num_sbn = 256;

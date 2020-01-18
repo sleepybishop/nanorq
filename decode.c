@@ -39,14 +39,14 @@ int main(int argc, char *argv[]) {
   }
 
   uint8_t num_sbn = nanorq_blocks(rq);
-  uint32_t fid;
+  uint32_t tag;
   uint16_t packet_size = nanorq_symbol_size(rq);
   uint8_t packet[packet_size];
-  while (fread(&fid, 1, sizeof(fid), ih)) {
-    fid = be32toh(fid);
+  while (fread(&tag, 1, sizeof(tag), ih)) {
+    tag = be32toh(tag);
     fread(packet, packet_size, 1, ih);
-    if (!nanorq_decoder_add_symbol(rq, (void *)packet, fid, myio)) {
-      fprintf(stdout, "adding symbol %d failed.\n", fid);
+    if (!nanorq_decoder_add_symbol(rq, (void *)packet, tag, myio)) {
+      fprintf(stdout, "adding symbol %d failed.\n", tag);
       abort();
     }
   }
