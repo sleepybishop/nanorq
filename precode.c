@@ -230,7 +230,7 @@ static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
     int Vrows = rows - i, Vcols = cols - i - u, V0 = i;
     int r = Vcols + 1, chosen = Vrows;
 
-    for (int row = V0; row < rows; row++) {
+    for (int row = V0; row < rows - P->H; row++) {
       int nz = counts[d[row]];
       if (nz > 0 && nz < r) {
         chosen = row;
@@ -252,24 +252,13 @@ static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
     }
     decode_rear_swap(A, V0, V0 + 1, V0 + Vcols, c, d);
     // decrement nz counts if row had nz at V0 or nz's at last r - 1 cols
-    int nzval[rows], nztst[rows];
-    for (int row = V0 + 1; row < rows; row++) {
-      nzval[row] = wrkmat_at(A, d[row], c[V0]);
-    }
-    for (int row = V0 + 1; row < rows; row++) {
-      nztst[row] = nzval[row] > 0;
-    }
-    for (int row = V0 + 1; row < rows; row++) {
-      counts[d[row]] -= nztst[row];
+    for (int row = V0 + 1; row < rows - P->H; row++) {
       for (int col = 0; col < (r - 1); col++) {
-        if (wrkmat_at(A, d[row], c[V0 + Vcols - col - 1])) {
-          counts[d[row]]--;
-        }
+        counts[d[row]] -= !!wrkmat_at(A, d[row], c[V0 + Vcols - col - 1]);
       }
-    }
-    for (int row = V0 + 1; row < rows; row++) {
-      uint8_t beta = nzval[row];
-      if (nztst[row]) {
+      uint8_t beta = wrkmat_at(A, d[row], c[V0]);
+      if (beta) {
+        counts[d[row]]--;
         wrkmat_axpy(A, d[row], d[V0], beta);
         sched_push(S, d[row], d[V0], beta);
       }
@@ -278,6 +267,23 @@ static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
     u += r - 1;
   }
   *vp = i;
+  return true;
+}
+
+static bool decode_hdpc(params *P, wrkmat *A, schedule *S, int row_start) {
+  int rows = A->rows;
+  int *c = S->c, *d = S->d;
+
+  for (int row = 0; row < row_start; row++) {
+    for (int h = P->S + P->Kprime; h < rows; h++) {
+      uint8_t beta = wrkmat_at(A, d[h], c[row]);
+      if (beta) {
+        wrkmat_axpy(A, d[h], d[row], beta);
+        sched_push(S, d[h], d[row], beta);
+      }
+    }
+  }
+
   return true;
 }
 
@@ -351,6 +357,8 @@ schedule *precode_matrix_invert(params *P, wrkmat *A) {
     sched_free(S);
     return NULL;
   }
+
+  decode_hdpc(P, A, S, vp);
 
   if (!decode_solve(P, A, S, vp)) {
     wrkmat_free(A);
