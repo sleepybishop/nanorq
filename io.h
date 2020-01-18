@@ -16,6 +16,7 @@ struct ioctx {
 };
 
 struct ioctx *ioctx_from_file(const char *fn, int t);
+struct ioctx *ioctx_mmap_file(const char *fn, int t);
 struct ioctx *ioctx_from_mem(const uint8_t *ptr, size_t t);
 
 #endif
