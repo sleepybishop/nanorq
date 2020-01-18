@@ -9,14 +9,14 @@
 
 typedef struct {
   octmat A;
-  int rows;
-  int cols;
+  size_t rows;
+  size_t cols;
 } wrkmat;
 
 #define wrkmat_at(w, i, j) (om_A(w->A, i, j))
 #define wrkmat_chk(w, i, j) (!!om_A(w->A, i, j))
 
-wrkmat *wrkmat_new(int rows, int cols);
+wrkmat *wrkmat_new(size_t rows, size_t cols);
 void wrkmat_free(wrkmat *w);
 void wrkmat_assign_block(wrkmat *A, octmat *B, int i, int j, int m, int n);
 void wrkmat_print(wrkmat *w, FILE *stream);

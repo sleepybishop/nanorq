@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-wrkmat *wrkmat_new(int rows, int cols) {
+wrkmat *wrkmat_new(size_t rows, size_t cols) {
   wrkmat *w = calloc(1, sizeof(wrkmat));
   w->rows = rows;
   w->cols = cols;
