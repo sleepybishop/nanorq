@@ -463,7 +463,7 @@ static struct block_decoder *nanorq_block_decoder(nanorq *rq, uint8_t sbn) {
   dec->P = params_init(num_symbols);
   dec->repair_mask = bitmask_new(num_symbols);
   int decode_rows = dec->P.S + dec->P.H + dec->P.Kprime;
-  decode_rows += decode_rows / 5; // estimate 20 pct overhead
+  decode_rows += (decode_rows / 5); // estimate 20 pct overhead
   om_resize(&dec->D, decode_rows, symbol_size * rq->common.Al);
 
   rq->decoders[sbn] = dec;

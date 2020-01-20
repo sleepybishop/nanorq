@@ -453,7 +453,7 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M,
   for (int gap = 0; gap < num_symbols && rep_idx < num_repair; gap++) {
     if (bitmask_check(repair_mask, gap))
       continue;
-    uint16_t row = skip + gap;
+    int row = skip + gap;
     struct repair_sym rs = kv_A(*repair_bin, rep_idx++);
     ocopy(om_P(*D), om_P(rs.row), row, 0, D->cols);
   }

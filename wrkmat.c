@@ -1,13 +1,17 @@
-#include "wrkmat.h"
 #include <stdlib.h>
 #include <string.h>
 
-wrkmat *wrkmat_new(size_t rows, size_t cols) {
+#include "gf2.h"
+#include "wrkmat.h"
+
+wrkmat *wrkmat_new(int rows, int cols) {
   wrkmat *w = calloc(1, sizeof(wrkmat));
   w->rows = rows;
   w->cols = cols;
 
-  om_resize(&w->A, rows, cols);
+  w->GF2 = gf2mat_new(rows, cols);
+  w->rowmap = calloc(sizeof(int), rows);
+  w->type = calloc(sizeof(int), rows);
 
   return w;
 }
@@ -15,17 +19,38 @@ wrkmat *wrkmat_new(size_t rows, size_t cols) {
 void wrkmat_free(wrkmat *w) {
   if (!w)
     return;
-  om_destroy(&w->A);
+  if (w->rowmap)
+    free(w->rowmap);
+  if (w->type)
+    free(w->type);
+  if (w->GF2)
+    gf2mat_free(w->GF2);
+  om_destroy(&w->GF256);
   free(w);
 }
 
 void wrkmat_assign_block(wrkmat *w, octmat *B, int i, int j, int m, int n) {
-  for (int row = i; row < i + m; row++) {
-    for (int col = j; col < j + n; col++) {
-      om_A(w->A, row, col) = om_A(*B, row - i, col - j);
+  octmat F = OM_INITIAL;
+  om_resize(&F, 2 * m, w->cols);
+  for (int row = 0; row < m; row++) {
+    for (int col = 0; col < n; col++) {
+      om_A(F, row, col) = om_A(*B, row, col);
+      gf2mat_set(w->GF2, row + i, col + j, om_A(F, row, col) > 0);
+    }
+    for (int col = n; col < w->cols; col++) {
+      om_A(F, row, col) = gf2_at(w->GF2, row + i, col);
     }
   }
+
   om_destroy(B);
+  w->GF256 = F;
+
+  // overlay GF256 block over GF2
+  for (int row = i; row < i + m; row++) {
+    w->type[row] = 1;
+    w->rowmap[row] = row - i;
+  }
+  w->blkidx = m;
 }
 
 void wrkmat_print(wrkmat *w, FILE *stream) {
@@ -45,22 +70,60 @@ void wrkmat_print(wrkmat *w, FILE *stream) {
   }
 }
 
-uint8_t wrkmat_get(wrkmat *w, int i, int j) { return om_A(w->A, i, j); }
+uint8_t wrkmat_get(wrkmat *w, int i, int j) {
+  return w->type[i] ? om_A(w->GF256, w->rowmap[i], j)
+                    : gf2mat_get(w->GF2, i, j);
+}
 
-void wrkmat_set(wrkmat *w, int i, int j, uint8_t b) { om_A(w->A, i, j) = b; }
+void wrkmat_set(wrkmat *w, int i, int j, uint8_t b) {
+  if (w->type[i]) {
+    om_A(w->GF256, i, j) = b;
+  } else if (b <= 1) {
+    gf2mat_set(w->GF2, i, j, b);
+  } else {
+    printf("%s:%d -- unhandled set\n", __FILE__, __LINE__);
+    abort();
+  }
+}
 
 void wrkmat_axpy(wrkmat *w, int i, int j, int beta) {
-  oaxpy(om_P(w->A), om_P(w->A), i, j, w->cols, beta);
+  if (w->type[i] == w->type[j]) {
+    if (w->type[i]) {
+      oaxpy(om_P(w->GF256), om_P(w->GF256), w->rowmap[i], w->rowmap[j], w->cols,
+            beta);
+      gf2mat_xor(w->GF2, i, j);
+    } else {
+      gf2mat_xor(w->GF2, i, j);
+    }
+  } else {
+    // if target row is in gf256, axpy in place from gf2 row
+    if (w->type[i]) {
+      uint8_t *tmp = om_R(w->GF256, w->rowmap[i]);
+      gf2mat_axpy(w->GF2, j, tmp, beta);
+    } else {
+      if (w->blkidx >= w->GF256.rows) {
+        printf("%s:%d -- unhandled axpy into gf2 row %d from gf256 row %d with "
+               "beta %d\n",
+               __FILE__, __LINE__, i, j, beta);
+        abort();
+      }
+      uint8_t *tmp = om_R(w->GF256, w->blkidx);
+      gf2mat_fill(w->GF2, i, tmp);
+      w->type[i] = 1; // row i is now a gf256 row
+      w->rowmap[i] = w->blkidx;
+      w->blkidx++;
+      oaxpy(om_P(w->GF256), om_P(w->GF256), w->rowmap[i], w->rowmap[j], w->cols,
+            beta);
+    }
+  }
 }
 
 void wrkmat_scal(wrkmat *w, int i, int beta) {
-  oscal(om_P(w->A), i, w->cols, beta);
-}
-
-int wrkmat_nnz(wrkmat *w, int i, int s, int e) {
-  int nz = 0;
-  for (int col = s; col < e; col++) {
-    nz += (om_A(w->A, i, col) > 0);
+  if (w->type[i]) {
+    oscal(om_P(w->GF256), w->rowmap[i], w->cols, beta);
+  } else {
+    printf("%s:%d -- unhandled scal row %d by beta %d ,  %d\n", __FILE__,
+           __LINE__, i, beta, OCT_INV[beta]);
+    abort();
   }
-  return nz;
 }
