@@ -14,6 +14,8 @@ typedef kvec_t(struct sch_op) oplist;
 typedef struct sch {
   int *c;
   int *d;
+  int *ci;
+  int *di;
   oplist ops;
 } schedule;
 

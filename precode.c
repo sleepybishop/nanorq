@@ -174,44 +174,44 @@ static void decode_patch(params *P, wrkmat *A, struct bitmask *mask,
   }
 }
 
-static int decode_nz_fwd(wrkmat *A, int row, int s, int e, int c[], int d[]) {
+static int decode_nz_fwd(wrkmat *A, int row, int s, int e, schedule *S) {
   for (int col = s; col < e; col++) {
-    int tmp = wrkmat_chk(A, d[row], c[col]);
+    int tmp = wrkmat_chk(A, S->d[row], S->c[col]);
     if (tmp > 0)
       return col;
   }
   return e;
 }
 
-static int decode_nz_rev(wrkmat *A, int row, int s, int e, int c[], int d[]) {
+static int decode_nz_rev(wrkmat *A, int row, int s, int e, schedule *S) {
   for (int col = e - 1; col >= s; col--) {
-    int tmp = wrkmat_chk(A, d[row], c[col]);
+    int tmp = wrkmat_chk(A, S->d[row], S->c[col]);
     if (tmp == 0)
       return col;
   }
   return s;
 }
 
-static void decode_rear_swap(wrkmat *A, int row, int s, int e, int c[],
-                             int d[]) {
+static void decode_rear_swap(wrkmat *A, int row, int s, int e, schedule *S) {
   while (s < e) {
-    int swap1 = decode_nz_fwd(A, row, s, e, c, d);
+    int swap1 = decode_nz_fwd(A, row, s, e, S);
     if (swap1 == e)
       return;
-    int swap2 = decode_nz_rev(A, row, s, e, c, d);
+    int swap2 = decode_nz_rev(A, row, s, e, S);
     if (swap2 == s)
       return;
     if (swap1 >= swap2)
       return;
-    TMPSWAP(int, c[swap1], c[swap2]);
+    TMPSWAP(int, S->c[swap1], S->c[swap2]);
+    TMPSWAP(int, S->ci[S->c[swap1]], S->ci[S->c[swap2]]);
     s++;
     e--;
   }
 }
 
 static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
-  int i = 0, u = P->P, *c = S->c, *d = S->d;
-  int rows = A->rows, cols = A->cols;
+  int i = 0, u = P->P, rows = A->rows, cols = A->cols;
+  int *c = S->c, *d = S->d, *ci = S->ci, *di = S->di;
 
   int counts[rows];
   for (int row = 0; row < rows; row++) {
@@ -236,13 +236,15 @@ static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
     }
     if (V0 != chosen) {
       TMPSWAP(int, d[V0], d[chosen]);
+      TMPSWAP(int, di[d[V0]], di[d[chosen]]);
     }
     // find first one
-    if (wrkmat_chk(A, d[V0], c[V0]) == 0) {
-      int first = decode_nz_fwd(A, V0, V0 + 1, V0 + Vcols, c, d);
+    int first = decode_nz_fwd(A, V0, V0, V0 + Vcols, S);
+    if (first != V0) {
       TMPSWAP(int, c[V0], c[first]);
+      TMPSWAP(int, ci[c[V0]], ci[c[first]]);
     }
-    decode_rear_swap(A, V0, V0 + 1, V0 + Vcols, c, d);
+    decode_rear_swap(A, V0, V0 + 1, V0 + Vcols, S);
     // decrement nz counts if row had nz at V0 or nz's at last r - 1 cols
     for (int row = V0 + 1; row < rows - P->H; row++) {
       for (int col = 0; col < (r - 1); col++) {
@@ -281,7 +283,7 @@ static bool decode_hdpc(params *P, wrkmat *A, schedule *S, int row_start) {
 
 static bool decode_solve(params *P, wrkmat *A, schedule *S, int row_start) {
   int rows = A->rows, cols = A->cols;
-  int *c = S->c, *d = S->d;
+  int *c = S->c, *d = S->d, *di = S->di;
   uint8_t beta;
 
   for (int row = row_start; row < rows; row++) {
@@ -305,6 +307,7 @@ static bool decode_solve(params *P, wrkmat *A, schedule *S, int row_start) {
 
     if (row != nzrow) {
       TMPSWAP(int, d[row], d[nzrow]);
+      TMPSWAP(int, di[d[row]], di[d[nzrow]]);
     }
 
     beta = wrkmat_at(A, d[row], c[row]);
@@ -343,6 +346,9 @@ schedule *precode_matrix_invert(params *P, wrkmat *A) {
   for (int row = 0; row < rows; row++) {
     S->d[row] = (row + P->S + P->H) % rows;
   }
+  for (int i = 0; i < rows; i++) {
+    S->di[S->d[i]] = i;
+  }
 
   if (!decode_amd(P, A, S, &vp)) {
     wrkmat_free(A);
@@ -371,12 +377,8 @@ bool precode_matrix_intermediate1(params *P, wrkmat *A, octmat *D) {
   if (S == NULL)
     return false;
 
-  int dinv[rows];
-  for (int i = 0; i < rows; i++)
-    dinv[S->d[i]] = i;
-
   precode_matrix_apply_sched(D, S);
-  precode_matrix_permute(D, dinv, rows);
+  precode_matrix_permute(D, S->di, rows);
   precode_matrix_permute(D, S->c, cols);
 
   sched_free(S);
