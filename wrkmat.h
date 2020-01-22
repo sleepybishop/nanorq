@@ -22,6 +22,7 @@ typedef struct {
 #define wrkmat_at(w, i, j)                                                     \
   (w->type[i] ? om_A(w->GF256, w->rowmap[i], j) : gf2_at(w->GF2, i, j))
 #define wrkmat_nnz(w, i, s, e) gf2mat_nnz(w->GF2, i, s, e)
+#define wrkmat_zero(w, i) gf2mat_zero(w->GF2, i)
 
 wrkmat *wrkmat_new(int rows, int cols);
 void wrkmat_free(wrkmat *w);

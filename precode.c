@@ -147,9 +147,7 @@ static void decode_patch(params *P, wrkmat *A, struct bitmask *mask,
     if (bitmask_check(mask, gap))
       continue;
     int row = gap + P->H + P->S;
-    for (int col = 0; col < A->cols; col++) {
-      wrkmat_set(A, row, col, 0);
-    }
+    wrkmat_zero(A, row);
 
     uint16_vec idxs =
         params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
@@ -162,9 +160,7 @@ static void decode_patch(params *P, wrkmat *A, struct bitmask *mask,
 
   int rep_row = P->L;
   for (; rep_row < A->rows; rep_row++) {
-    for (int col = 0; col < A->cols; col++) {
-      wrkmat_set(A, rep_row, col, 0);
-    }
+    wrkmat_zero(A, rep_row);
     uint16_vec idxs =
         params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
     for (int idx = 0; idx < kv_size(idxs); idx++) {
