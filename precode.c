@@ -205,7 +205,7 @@ static void decode_rear_swap(wrkmat *A, int row, int s, int e, schedule *S) {
   }
 }
 
-static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
+static bool decode_amd(params *P, wrkmat *A, schedule *S) {
   int i = 0, u = P->P, rows = A->rows, cols = A->cols;
   int *c = S->c, *d = S->d, *ci = S->ci, *di = S->di;
 
@@ -256,12 +256,13 @@ static bool decode_amd(params *P, wrkmat *A, schedule *S, int *vp) {
     i++;
     u += r - 1;
   }
-  *vp = i;
+  S->i = i;
+  S->u = u;
   return true;
 }
 
-static bool decode_hdpc(params *P, wrkmat *A, schedule *S, int row_start) {
-  int rows = A->rows;
+static bool decode_hdpc(params *P, wrkmat *A, schedule *S) {
+  int rows = A->rows, row_start = S->i;
   int *c = S->c, *d = S->d;
 
   for (int row = 0; row < row_start; row++) {
@@ -277,8 +278,8 @@ static bool decode_hdpc(params *P, wrkmat *A, schedule *S, int row_start) {
   return true;
 }
 
-static bool decode_solve(params *P, wrkmat *A, schedule *S, int row_start) {
-  int rows = A->rows, cols = A->cols;
+static bool decode_solve(params *P, wrkmat *A, schedule *S) {
+  int rows = A->rows, cols = A->cols, row_start = S->i;
   int *c = S->c, *d = S->d, *di = S->di;
   uint8_t beta;
 
@@ -335,7 +336,7 @@ static bool decode_solve(params *P, wrkmat *A, schedule *S, int row_start) {
 }
 
 schedule *precode_matrix_invert(params *P, wrkmat *A) {
-  int rows = A->rows, cols = A->cols, vp = 0;
+  int rows = A->rows, cols = A->cols;
   schedule *S = sched_new(rows, cols, P->L);
 
   // roll precode matrix to put G_ENC rows on top
@@ -346,15 +347,15 @@ schedule *precode_matrix_invert(params *P, wrkmat *A) {
     S->di[S->d[i]] = i;
   }
 
-  if (!decode_amd(P, A, S, &vp)) {
+  if (!decode_amd(P, A, S)) {
     wrkmat_free(A);
     sched_free(S);
     return NULL;
   }
 
-  decode_hdpc(P, A, S, vp);
+  decode_hdpc(P, A, S);
 
-  if (!decode_solve(P, A, S, vp)) {
+  if (!decode_solve(P, A, S)) {
     wrkmat_free(A);
     sched_free(S);
     return NULL;

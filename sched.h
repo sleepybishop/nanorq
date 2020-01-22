@@ -17,6 +17,8 @@ typedef struct sch {
   int *ci;
   int *di;
   oplist ops;
+  int i;
+  int u;
 } schedule;
 
 schedule *sched_new(int rows, int cols, int estimated_ops);
