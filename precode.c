@@ -33,33 +33,29 @@ static void precode_matrix_apply_sched(octmat *D, schedule *S) {
 }
 
 static void precode_matrix_make_LDPC1(wrkmat *A, int S, int B) {
-  int row, col;
-  for (row = 0; row < S; row++) {
-    for (col = 0; col < B; col++) {
-      uint16_t submtx = col / S;
-      if ((row == (col % S)) || (row == (col + submtx + 1) % S) ||
-          (row == (col + 2 * (submtx + 1)) % S)) {
-        wrkmat_set(A, row, col, 1);
-      }
-    }
+  for (int col = 0; col < B; col++) {
+    int submtx = col / S;
+    int b1 = (col % S);
+    int b2 = (col + submtx + 1) % S;
+    int b3 = (col + 2 * (submtx + 1)) % S;
+    wrkmat_set(A, b1, col, 1);
+    wrkmat_set(A, b2, col, 1);
+    wrkmat_set(A, b3, col, 1);
   }
 }
 
-static void precode_matrix_make_LDPC2(wrkmat *A, uint16_t skip, uint16_t rows,
-                                      uint16_t cols) {
-  for (int row = 0; row < rows; row++) {
-    uint16_t start = row % cols;
-    for (int col = 0; col < cols; col++) {
-      uint8_t val = (col == start || col == (start + 1) % cols) > 0;
-      wrkmat_set(A, row, skip + col, val);
-    }
+static void precode_matrix_make_LDPC2(wrkmat *A, int W, int S, int P) {
+  for (int idx = 0; idx < S; idx++) {
+    int b1 = idx % P;
+    int b2 = (idx + 1) % P;
+    wrkmat_set(A, idx, W + b1, 1);
+    wrkmat_set(A, idx, W + b2, 1);
   }
 }
 
-static void precode_matrix_make_identity(wrkmat *A, int size, int skip_row,
-                                         int skip_col) {
-  for (int diag = 0; diag < size; diag++) {
-    wrkmat_set(A, skip_row + diag, skip_col + diag, 1);
+static void precode_matrix_make_identity(wrkmat *A, int dim, int m, int n) {
+  for (int diag = 0; diag < dim; diag++) {
+    wrkmat_set(A, m + diag, n + diag, 1);
   }
 }
 
@@ -67,18 +63,14 @@ static octmat precode_matrix_make_MT(int rows, int cols) {
   octmat MT = OM_INITIAL;
   om_resize(&MT, rows, cols);
 
+  for (int col = 0; col < MT.cols - 1; col++) {
+    uint32_t b1 = rnd_get(col + 1, 6, MT.rows);
+    uint32_t b2 = (b1 + rnd_get(col + 1, 7, MT.rows - 1) + 1) % MT.rows;
+    om_A(MT, b1, col) = 1;
+    om_A(MT, b2, col) = 1;
+  }
   for (int row = 0; row < MT.rows; row++) {
-    int col;
-    for (col = 0; col < MT.cols - 1; col++) {
-      uint32_t tmp = rnd_get(col + 1, 6, MT.rows);
-      if ((row == tmp) ||
-          (row == (tmp + rnd_get(col + 1, 7, MT.rows - 1) + 1) % MT.rows)) {
-        om_A(MT, row, col) = 1;
-      } else {
-        om_A(MT, row, col) = 0;
-      }
-    }
-    om_A(MT, row, col) = OCT_EXP[row];
+    om_A(MT, row, MT.cols - 1) = OCT_EXP[row];
   }
   return MT;
 }
@@ -92,9 +84,7 @@ static octmat precode_matrix_make_HDPC(params *P) {
   om_resize(&MTxGAMMA, m, n);
 
   uint8_t gv[2 * n];
-  for (int col = 0; col < n; col++) {
-    gv[col] = 0;
-  }
+  memset(gv, 0, n);
   for (int col = n; col < 2 * n; col++) {
     gv[col] = OCT_EXP[col % OCT_EXP_SIZE];
   }
