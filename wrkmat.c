@@ -77,7 +77,7 @@ uint8_t wrkmat_get(wrkmat *w, int i, int j) {
 
 void wrkmat_set(wrkmat *w, int i, int j, uint8_t b) {
   if (w->type[i]) {
-    om_A(w->GF256, i, j) = b;
+    om_A(w->GF256, w->rowmap[i], j) = b;
   } else if (b <= 1) {
     gf2mat_set(w->GF2, i, j, b);
   } else {
