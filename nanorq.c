@@ -195,7 +195,7 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
     }
   }
 
-  wrkmat *A = precode_matrix_gen(P, 0);
+  spmat *A = precode_matrix_gen(P, 0);
   if (!precode_matrix_intermediate1(P, A, &D)) {
     return false;
   }

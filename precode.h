@@ -8,12 +8,12 @@
 #include "spmat.h"
 #include "wrkmat.h"
 
-wrkmat *precode_matrix_gen(params *P, int overhead);
+spmat *precode_matrix_gen(params *P, int overhead);
 
-bool precode_matrix_intermediate1(params *P, wrkmat *A, octmat *D);
-bool precode_matrix_intermediate2(params *P, wrkmat *A, octmat *D, octmat *M,
+bool precode_matrix_intermediate1(params *P, spmat *A, octmat *D);
+bool precode_matrix_intermediate2(params *P, spmat *A, octmat *D, octmat *M,
                                   repair_vec *repair_bin, struct bitmask *mask,
-                                  int num_symbols, int overhead);
+                                  int num_symbols);
 
 void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr,
                               size_t len);
