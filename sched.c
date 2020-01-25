@@ -34,7 +34,7 @@ void sched_free(schedule *S) {
     free(S->ci);
   if (S->di)
     free(S->di);
-  if (kv_size(S->ops))
+  if (kv_max(S->ops))
     kv_destroy(S->ops);
   free(S);
 }
