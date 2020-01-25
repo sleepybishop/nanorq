@@ -5,6 +5,7 @@ params.o\
 precode.o\
 rand.o\
 sched.o\
+spmat.o\
 tuple.o\
 wrkmat.o\
 nanorq.o
