@@ -104,7 +104,7 @@ static octmat precode_matrix_make_HDPC(params *P) {
 static void precode_matrix_make_G_ENC(wrkmat *A, params *P) {
   for (int row = P->S + P->H; row < P->L; row++) {
     uint32_t isi = (row - P->S) - P->H;
-    uint16_vec idxs = params_get_idxs(isi, P);
+    int_vec idxs = params_get_idxs(isi, P);
     for (int idx = 0; idx < kv_size(idxs); idx++) {
       wrkmat_set(A, row, kv_A(idxs, idx), 1);
     }
@@ -139,7 +139,7 @@ static void decode_patch(params *P, wrkmat *A, struct bitmask *mask,
     int row = gap + P->H + P->S;
     wrkmat_zero(A, row);
 
-    uint16_vec idxs =
+    int_vec idxs =
         params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
     for (int idx = 0; idx < kv_size(idxs); idx++) {
       wrkmat_set(A, row, kv_A(idxs, idx), 1);
@@ -151,7 +151,7 @@ static void decode_patch(params *P, wrkmat *A, struct bitmask *mask,
   int rep_row = P->L;
   for (; rep_row < A->rows; rep_row++) {
     wrkmat_zero(A, rep_row);
-    uint16_vec idxs =
+    int_vec idxs =
         params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
     for (int idx = 0; idx < kv_size(idxs); idx++) {
       wrkmat_set(A, rep_row, kv_A(idxs, idx), 1);
@@ -374,7 +374,7 @@ bool precode_matrix_intermediate1(params *P, wrkmat *A, octmat *D) {
 
 void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr,
                               size_t len) {
-  uint16_vec idxs = params_get_idxs(isi, P);
+  int_vec idxs = params_get_idxs(isi, P);
   for (int idx = 0; idx < kv_size(idxs); idx++) {
     oaddrow(ptr, om_P(*D), 0, kv_A(idxs, idx), len);
   }

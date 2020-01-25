@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <kvec.h>
 #include <octmat.h>
-#include <wrkmat.h>
+
+#include "kvec.h"
 
 #define div_ceil(A, B) ((A) / (B) + ((A) % (B) ? 1 : 0))
 #define div_floor(A, B) ((A) / (B))
@@ -24,6 +24,6 @@ struct repair_sym {
 };
 
 typedef kvec_t(struct repair_sym) repair_vec;
-typedef kvec_t(uint16_t) uint16_vec;
+typedef kvec_t(int) int_vec;
 
 #endif

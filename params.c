@@ -45,27 +45,27 @@ params params_init(uint16_t K) {
   return P;
 }
 
-uint16_vec params_get_idxs(uint32_t X, params *P) {
-  uint16_vec ret;
+int_vec params_get_idxs(uint32_t X, params *P) {
+  int_vec ret;
   tuple t = gen_tuple(X, P);
 
   kv_init(ret);
-  kv_resize(uint16_t, ret, t.d + t.d1);
-  kv_push(uint16_t, ret, t.b);
+  kv_resize(int, ret, t.d + t.d1);
+  kv_push(int, ret, t.b);
 
   for (int j = 1; j < t.d; j++) {
     t.b = (t.b + t.a) % P->W;
-    kv_push(uint16_t, ret, t.b);
+    kv_push(int, ret, t.b);
   }
   while (t.b1 >= P->P)
     t.b1 = (t.b1 + t.a1) % P->P1;
 
-  kv_push(uint16_t, ret, P->W + t.b1);
+  kv_push(int, ret, P->W + t.b1);
   for (int j = 1; j < t.d1; j++) {
     t.b1 = (t.b1 + t.a1) % P->P1;
     while (t.b1 >= P->P)
       t.b1 = (t.b1 + t.a1) % P->P1;
-    kv_push(uint16_t, ret, P->W + t.b1);
+    kv_push(int, ret, P->W + t.b1);
   }
   return ret;
 }

@@ -3,6 +3,9 @@
 
 #include "bitmask.h"
 #include "params.h"
+#include "rand.h"
+#include "sched.h"
+#include "wrkmat.h"
 
 wrkmat *precode_matrix_gen(params *P, int overhead);
 
