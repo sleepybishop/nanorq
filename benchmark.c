@@ -77,7 +77,7 @@ void usage(char *prog) {
   exit(1);
 }
 
-double encode(uint64_t len, uint16_t packet_size, uint16_t num_packets,
+double encode(uint64_t len, size_t packet_size, size_t num_packets,
               float overhead_pct, struct ioctx *myio, symvec *packets,
               uint64_t *oti_common, uint32_t *oti_scheme) {
   nanorq *rq = nanorq_encoder_new_ex(len, packet_size, num_packets, 0, 8);
@@ -137,7 +137,7 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
   return elapsed;
 }
 
-int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
+int run(size_t num_packets, size_t packet_size, float overhead_pct) {
   double elapsed;
   uint64_t objsize = 160 * 1024 * 1024;
   int num_sbn = objsize / (num_packets * packet_size);
@@ -170,11 +170,11 @@ int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
   if (elapsed < 0)
     abort();
   fprintf(stdout,
-          "ENCODE | Symbol size: %d, symbol count = %d, encoded %.2f MB in "
+          "ENCODE | Symbol size: %u, symbol count = %u, encoded %.2f MB in "
           "%5.3fsecs, "
           "throughput: "
           "%6.1fMbit/s (%d sbns)\n",
-          packet_size, num_packets, 1.0 * sz / (1024 * 1024), elapsed,
+          (unsigned)packet_size, (unsigned)num_packets, 1.0 * sz / (1024 * 1024), elapsed,
           (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
 
   myio->destroy(myio);
@@ -195,9 +195,9 @@ int run(uint16_t num_packets, uint16_t packet_size, float overhead_pct) {
     abort();
   fprintf(
       stdout,
-      "DECODE | Symbol size: %d, symbol count = %d, decoded %.2f MB in "
+      "DECODE | Symbol size: %u, symbol count = %u, decoded %.2f MB in "
       "%5.3fsecs using %3.1f%% overhead, throughput: %6.1fMbit/s (%d sbns)\n",
-      packet_size, num_packets, 1.0 * sz / (1024 * 1024), elapsed, overhead_pct,
+      (unsigned)packet_size, (unsigned)num_packets, 1.0 * sz / (1024 * 1024), elapsed, overhead_pct,
       (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
 
   myio->destroy(myio);
@@ -226,8 +226,8 @@ int main(int argc, char *argv[]) {
   srand((unsigned int)time(0));
 
   // determine chunks, symbol size
-  uint16_t packet_size = strtol(argv[1], NULL, 10); // T
-  uint16_t num_packets = strtol(argv[2], NULL, 10); // K
+  size_t packet_size = strtol(argv[1], NULL, 10); // T
+  size_t num_packets = strtol(argv[2], NULL, 10); // K
   float overhead_pct = strtof(argv[3], NULL);       // overhead pct
 
   run(num_packets, packet_size, overhead_pct);

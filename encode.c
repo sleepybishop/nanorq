@@ -11,7 +11,7 @@
 void dump_esi(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn,
               uint32_t esi) {
   uint32_t tag = htobe32(nanorq_tag(sbn, esi));
-  uint16_t packet_size = nanorq_symbol_size(rq);
+  size_t packet_size = nanorq_symbol_size(rq);
   uint8_t data[packet_size];
   memset(data, 0, packet_size);
   uint64_t written = nanorq_encode(rq, (void *)data, esi, sbn, myio);
@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
   size_t filesize = myio->size(myio);
 
   // determine chunks, symbol size, memory usage from size
-  uint16_t packet_size = strtol(argv[2], NULL, 10); // T
+  size_t packet_size = strtol(argv[2], NULL, 10); // T
   uint8_t align = 8;
 
   srand((unsigned int)time(0));

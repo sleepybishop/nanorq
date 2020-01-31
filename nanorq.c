@@ -16,31 +16,31 @@ struct oti_scheme {
 };
 
 struct partition {
-  uint16_t IL; /* size of long blocks */
-  uint16_t IS; /* size of short blocks*/
-  uint16_t JL; /* number of long blocks */
-  uint16_t JS; /* number of short blocks */
+  size_t IL; /* size of long blocks */
+  size_t IS; /* size of short blocks*/
+  size_t JL; /* number of long blocks */
+  size_t JS; /* number of short blocks */
 };
 
 struct source_block {
   size_t sbloc;
   size_t part_tot;
   struct partition part;
-  uint16_t al;
+  size_t al;
 };
 
 struct block_encoder {
-  uint8_t sbn;
-  uint16_t num_symbols;
-  uint16_t symbol_size;
+  size_t sbn;
+  size_t num_symbols;
+  size_t symbol_size;
   params P;
   octmat D;
 };
 
 struct block_decoder {
-  uint8_t sbn;
-  uint16_t num_symbols;
-  uint16_t symbol_size;
+  size_t sbn;
+  size_t num_symbols;
+  size_t symbol_size;
   params P;
   octmat D;
   repair_vec repair_bin;
@@ -60,7 +60,7 @@ struct nanorq {
 
 static struct oti_scheme gen_scheme_specific(struct oti_common *common, int K,
                                              int Z) {
-  uint16_t Kn = K;
+  size_t Kn = K;
   struct oti_scheme ret = {0};
   ret.Kt = div_ceil(common->F, common->T);
 
@@ -91,9 +91,9 @@ static struct partition fill_partition(size_t I, uint16_t J) {
   struct partition p = {0, 0, 0, 0};
   if (J == 0)
     return p;
-  p.IL = (uint16_t)(div_ceil(I, J));
-  p.IS = (uint16_t)(div_floor(I, J));
-  p.JL = (uint16_t)(I - p.IS * J);
+  p.IL = (size_t)(div_ceil(I, J));
+  p.IS = (size_t)(div_floor(I, J));
+  p.JL = (size_t)(I - p.IS * J);
   p.JS = J - p.JL;
 
   if (p.JL == 0)
@@ -138,8 +138,8 @@ static size_t get_symbol_offset(struct source_block *blk, size_t pos,
 }
 
 static struct block_encoder *nanorq_block_encoder(nanorq *rq, uint8_t sbn) {
-  uint16_t num_symbols = nanorq_block_symbols(rq, sbn);
-  uint16_t symbol_size = rq->common.T / rq->common.Al;
+  size_t num_symbols = nanorq_block_symbols(rq, sbn);
+  size_t symbol_size = rq->common.T / rq->common.Al;
 
   if (rq->encoders[sbn])
     return rq->encoders[sbn];
@@ -179,8 +179,8 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
     int col = 0;
     for (int i = 0; i < enc->symbol_size;) {
       size_t offset = get_symbol_offset(&blk, i, enc->num_symbols, esi);
-      uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
-      uint16_t stride = sublen * rq->common.Al;
+      size_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
+      size_t stride = sublen * rq->common.Al;
       i += sublen;
 
       size_t got = 0;
@@ -314,7 +314,7 @@ uint32_t nanorq_tag(uint8_t sbn, uint32_t esi) {
 
 uint64_t nanorq_transfer_length(nanorq *rq) { return rq->common.F; }
 
-uint16_t nanorq_symbol_size(nanorq *rq) { return rq->common.T; }
+size_t nanorq_symbol_size(nanorq *rq) { return rq->common.T; }
 
 nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
   uint64_t F = common >> 24;
@@ -372,7 +372,7 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
 +   size(1) IS
 */
 
-uint16_t nanorq_block_symbols(nanorq *rq, uint8_t sbn) {
+size_t nanorq_block_symbols(nanorq *rq, uint8_t sbn) {
   if (sbn < rq->src_part.JL)
     return rq->src_part.IL;
   if (sbn - rq->src_part.JL < rq->src_part.JS)
@@ -380,11 +380,11 @@ uint16_t nanorq_block_symbols(nanorq *rq, uint8_t sbn) {
   return 0;
 }
 
-uint32_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn) {
+size_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn) {
   return (uint32_t)((1 << 20) - nanorq_block_symbols(rq, sbn));
 }
 
-int nanorq_blocks(nanorq *rq) {
+size_t nanorq_blocks(nanorq *rq) {
   return (int)(rq->src_part.JL + rq->src_part.JS);
 }
 
@@ -401,8 +401,8 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
     uint8_t *dst = ((uint8_t *)data);
     for (int i = 0; i < enc->symbol_size;) {
       size_t offset = get_symbol_offset(&blk, i, enc->num_symbols, esi);
-      uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
-      uint16_t stride = sublen * rq->common.Al;
+      size_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
+      size_t stride = sublen * rq->common.Al;
       i += sublen;
 
       int got = 0;
@@ -447,8 +447,8 @@ void nanorq_encode_cleanup(nanorq *rq, uint8_t sbn) {
 }
 
 static struct block_decoder *nanorq_block_decoder(nanorq *rq, uint8_t sbn) {
-  uint16_t num_symbols = nanorq_block_symbols(rq, sbn);
-  uint16_t symbol_size = rq->common.T / rq->common.Al;
+  size_t num_symbols = nanorq_block_symbols(rq, sbn);
+  size_t symbol_size = rq->common.T / rq->common.Al;
 
   if (rq->decoders[sbn])
     return rq->decoders[sbn];
@@ -482,14 +482,14 @@ uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io, uint8_t sbn,
   int col = 0;
   for (int i = 0; i < dec->symbol_size;) {
     size_t offset = get_symbol_offset(&blk, i, dec->num_symbols, esi);
-    uint16_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
-    uint16_t stride = sublen * rq->common.Al;
+    size_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
+    size_t stride = sublen * rq->common.Al;
     i += sublen;
 
     if (offset >= rq->common.F)
       continue;
     if (io->seek(io, offset)) {
-      uint16_t len = stride;
+      size_t len = stride;
       if ((offset + stride) >= rq->common.F) {
         len = (rq->common.F - offset);
       }
@@ -510,7 +510,7 @@ bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
   if (dec == NULL)
     return false;
 
-  uint16_t cols = dec->D.cols;
+  size_t cols = dec->D.cols;
 
   if (esi >= (1 << 20))
     return false;
@@ -538,8 +538,8 @@ bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
   return true;
 }
 
-uint32_t nanorq_num_missing(nanorq *rq, uint8_t sbn) {
-  uint16_t num_symbols = nanorq_block_symbols(rq, sbn);
+size_t nanorq_num_missing(nanorq *rq, uint8_t sbn) {
+  size_t num_symbols = nanorq_block_symbols(rq, sbn);
   struct block_decoder *dec = nanorq_block_decoder(rq, sbn);
   if (dec == NULL)
     return 0;
@@ -547,7 +547,7 @@ uint32_t nanorq_num_missing(nanorq *rq, uint8_t sbn) {
   return bitmask_gaps(dec->repair_mask, num_symbols);
 }
 
-uint32_t nanorq_num_repair(nanorq *rq, uint8_t sbn) {
+size_t nanorq_num_repair(nanorq *rq, uint8_t sbn) {
   struct block_decoder *dec = nanorq_block_decoder(rq, sbn);
   if (dec == NULL)
     return 0;

@@ -58,8 +58,8 @@ static octmat precode_matrix_make_MT(int rows, int cols) {
   om_resize(&MT, rows, cols);
 
   for (int col = 0; col < MT.cols - 1; col++) {
-    uint32_t b1 = rnd_get(col + 1, 6, MT.rows);
-    uint32_t b2 = (b1 + rnd_get(col + 1, 7, MT.rows - 1) + 1) % MT.rows;
+    int b1 = rnd_get(col + 1, 6, MT.rows);
+    int b2 = (b1 + rnd_get(col + 1, 7, MT.rows - 1) + 1) % MT.rows;
     om_A(MT, b1, col) = 1;
     om_A(MT, b2, col) = 1;
   }
@@ -118,7 +118,7 @@ spmat *precode_matrix_gen(params *P, int overhead) {
 }
 
 static void decode_patch(params *P, spmat *A, struct bitmask *mask,
-                         repair_vec *repair_bin, uint16_t num_symbols) {
+                         repair_vec *repair_bin, size_t num_symbols) {
   size_t padding = P->Kprime - num_symbols;
   int num_gaps = bitmask_gaps(mask, num_symbols);
   int rep_idx = 0;
@@ -288,7 +288,7 @@ static void decode_fwd_GE(wrkmat *U, schedule *S, spmat *AT, int s, int e) {
 
 static wrkmat *decode_make_U(params *P, spmat *A, spmat *AT, schedule *S) {
   int rows = A->rows, row_start = S->i;
-  int *c = S->c, *d = S->d, *ci = S->ci, *di = S->di;
+  int *c = S->c, *d = S->d, *ci = S->ci;
 
   // build U upper from indexes
   wrkmat *U = wrkmat_new(rows, S->u);
@@ -338,16 +338,11 @@ static wrkmat *decode_make_U(params *P, spmat *A, spmat *AT, schedule *S) {
 static bool decode_solve(params *P, wrkmat *U, schedule *S) {
   int rows = U->rows, row_start = S->i;
   int *d = S->d, *di = S->di;
-  uint8_t beta;
+  uint8_t beta = 0;
 
-  for (int row = row_start; row < rows; row++) {
+  for (int row = row_start; row < P->L; row++) {
     int nzrow = row;
     int urow = row - S->i;
-
-    // past diagonal
-    if (row >= P->L) {
-      break;
-    }
 
     for (; nzrow < rows; nzrow++) {
       beta = wrkmat_at(U, d[nzrow], urow);
@@ -365,7 +360,6 @@ static bool decode_solve(params *P, wrkmat *U, schedule *S) {
       TMPSWAP(int, di[d[row]], di[d[nzrow]]);
     }
 
-    beta = wrkmat_at(U, d[row], urow);
     if (beta > 1) {
       wrkmat_scal(U, d[row], OCT_INV[beta]);
       sched_push(S, d[row], OCT_INV[beta], 0);

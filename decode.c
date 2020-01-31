@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
 
   uint8_t num_sbn = nanorq_blocks(rq);
   uint32_t tag;
-  uint16_t packet_size = nanorq_symbol_size(rq);
+  size_t packet_size = nanorq_symbol_size(rq);
   uint8_t packet[packet_size];
   while (fread(&tag, 1, sizeof(tag), ih)) {
     tag = be32toh(tag);

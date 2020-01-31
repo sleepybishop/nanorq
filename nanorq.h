@@ -31,20 +31,20 @@ uint32_t nanorq_oti_scheme_specific(nanorq *rq);
 // returns the total size of the payload to be transferred
 uint64_t nanorq_transfer_length(nanorq *rq);
 
-// returns the size symbols in bytes (T)
-uint16_t nanorq_symbol_size(nanorq *rq);
+// returns the symbol size in bytes (T)
+size_t nanorq_symbol_size(nanorq *rq);
 
 // returns number of blocks (SBN's)
-int nanorq_blocks(nanorq *rq);
+size_t nanorq_blocks(nanorq *rq);
 
 // returns the number of symbol rows per sbn block
-uint16_t nanorq_block_symbols(nanorq *rq, uint8_t sbn);
+size_t nanorq_block_symbols(nanorq *rq, uint8_t sbn);
 
 // returns a compound symbol identifier comprised of sbn and esi
 uint32_t nanorq_tag(uint8_t sbn, uint32_t esi);
 
 // return the max number of repair symbols allowed
-uint32_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn);
+size_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn);
 
 // return the number of bytes written for a given sbn and esi encode request
 uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
@@ -61,10 +61,10 @@ bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
                                struct ioctx *io);
 
 // returns number of symbol gaps in decoder for given block
-uint32_t nanorq_num_missing(nanorq *rq, uint8_t sbn);
+size_t nanorq_num_missing(nanorq *rq, uint8_t sbn);
 
 // returns number of repair symbols in decoder for given block
-uint32_t nanorq_num_repair(nanorq *rq, uint8_t sbn);
+size_t nanorq_num_repair(nanorq *rq, uint8_t sbn);
 
 // return whether or not sbn was successfully repaired
 bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn);
