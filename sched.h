@@ -5,8 +5,8 @@
 
 struct sch_op {
   uint8_t beta;
-  uint16_t i;
-  uint16_t j;
+  uint32_t i;
+  uint32_t j;
 };
 
 typedef kvec_t(struct sch_op) oplist;
