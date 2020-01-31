@@ -255,6 +255,37 @@ static bool decode_amd(params *P, spmat *A, spmat *AT, schedule *S) {
   return true;
 }
 
+static void decode_unwind_X(params *P, wrkmat *U, schedule *S) {
+  for (int i = S->Xe; i >= S->Xs; i--) {
+    struct sch_op op = kv_A(S->ops, i);
+    wrkmat_axpy(U, op.i, op.j, op.beta);
+    sched_push(S, op.i, op.j, op.beta);
+  }
+}
+
+static void decode_rewind_X(params *P, wrkmat *U, schedule *S) {
+  for (int i = S->Xs; i <= S->Xe; i++) {
+    struct sch_op op = kv_A(S->ops, i);
+    sched_push(S, op.i, op.j, op.beta);
+  }
+}
+
+static void decode_fwd_GE(wrkmat *U, schedule *S, spmat *AT, int s, int e) {
+  int *c = S->c, *d = S->d, *di = S->di;
+  for (int row = 0; row < S->i; row++) {
+    int mv = s < row ? row : s;
+    int_vec cs = AT->idxs[c[row]];
+    for (int it = 0; it < kv_size(cs); it++) {
+      int tmp = kv_A(cs, it);
+      int h = di[tmp];
+      if (h > mv && h < e) {
+        wrkmat_axpy(U, d[h], d[row], 1);
+        sched_push(S, d[h], d[row], 1);
+      }
+    }
+  }
+}
+
 static wrkmat *decode_make_U(params *P, spmat *A, spmat *AT, schedule *S) {
   int rows = A->rows, row_start = S->i;
   int *c = S->c, *d = S->d, *ci = S->ci, *di = S->di;
@@ -272,17 +303,10 @@ static wrkmat *decode_make_U(params *P, spmat *A, spmat *AT, schedule *S) {
   }
 
   // forward GE on U upper
-  for (int row = 0; row < row_start; row++) {
-    int_vec cs = AT->idxs[c[row]];
-    for (int it = 0; it < kv_size(cs); it++) {
-      int tmp = kv_A(cs, it);
-      int h = di[tmp];
-      if (h > row && h < rows - P->H) {
-        wrkmat_axpy(U, d[h], d[row], 1);
-        sched_push(S, d[h], d[row], 1);
-      }
-    }
-  }
+  decode_fwd_GE(U, S, AT, 0, S->i);
+  S->Xs = 0;
+  S->Xe = kv_size(S->ops) - 1;
+  decode_fwd_GE(U, S, AT, S->i - 1, rows - P->H);
 
   // build U lower from rightmost cols of HDPC and I_H
   octmat HDPC = precode_matrix_make_HDPC(P);
@@ -355,16 +379,19 @@ static bool decode_solve(params *P, wrkmat *U, schedule *S) {
       sched_push(S, d[del_row], d[row], beta);
     }
   }
+  return true;
+}
+
+static void decode_backsolve(params *P, wrkmat *U, schedule *S) {
+  int *d = S->d, row_start = S->i;
   for (int row = P->L - 1; row >= row_start; row--) {
     for (int del_row = 0; del_row < row; del_row++) {
-      beta = wrkmat_at(U, d[del_row], row - S->i);
+      uint8_t beta = wrkmat_at(U, d[del_row], row - S->i);
       if (beta == 0)
         continue;
-      // wrkmat_axpy(U, d[del_row], d[row], beta);
       sched_push(S, d[del_row], d[row], beta);
     }
   }
-  return true;
 }
 
 static void *inv_cleanup(spmat *A, spmat *AT, schedule *S, wrkmat *U) {
@@ -400,6 +427,10 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
 
   if (!decode_solve(P, U, S))
     return inv_cleanup(A, AT, S, U);
+
+  decode_unwind_X(P, U, S);
+  decode_backsolve(P, U, S);
+  decode_rewind_X(P, U, S);
 
   inv_cleanup(A, AT, NULL, U);
 

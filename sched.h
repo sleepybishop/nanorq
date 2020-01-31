@@ -12,13 +12,16 @@ struct sch_op {
 typedef kvec_t(struct sch_op) oplist;
 
 typedef struct sch {
-  int *c;
-  int *d;
-  int *ci;
-  int *di;
-  oplist ops;
-  int i;
-  int u;
+  int *c;     /* column permutation */
+  int *d;     /* row permutation */
+  int *ci;    /* inverse map of c */
+  int *di;    /* inverse map of d */
+  oplist ops; /* list of decoding operations */
+  int i;      /* dim of X submatrix */
+  int u;      /* remaining cols */
+
+  int Xs; /* start of operations on X */
+  int Xe; /* end of operations on X */
 } schedule;
 
 schedule *sched_new(int rows, int cols, int estimated_ops);
