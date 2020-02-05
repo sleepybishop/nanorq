@@ -174,7 +174,8 @@ int run(size_t num_packets, size_t packet_size, float overhead_pct) {
           "%5.3fsecs, "
           "throughput: "
           "%6.1fMbit/s (%d sbns)\n",
-          (unsigned)packet_size, (unsigned)num_packets, 1.0 * sz / (1024 * 1024), elapsed,
+          (unsigned)packet_size, (unsigned)num_packets,
+          1.0 * sz / (1024 * 1024), elapsed,
           (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
 
   myio->destroy(myio);
@@ -197,8 +198,8 @@ int run(size_t num_packets, size_t packet_size, float overhead_pct) {
       stdout,
       "DECODE | Symbol size: %u, symbol count = %u, decoded %.2f MB in "
       "%5.3fsecs using %3.1f%% overhead, throughput: %6.1fMbit/s (%d sbns)\n",
-      (unsigned)packet_size, (unsigned)num_packets, 1.0 * sz / (1024 * 1024), elapsed, overhead_pct,
-      (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
+      (unsigned)packet_size, (unsigned)num_packets, 1.0 * sz / (1024 * 1024),
+      elapsed, overhead_pct, (8.0 * sz / (1024 * 1024 * elapsed)), num_sbn);
 
   myio->destroy(myio);
   // verify
@@ -228,7 +229,7 @@ int main(int argc, char *argv[]) {
   // determine chunks, symbol size
   size_t packet_size = strtol(argv[1], NULL, 10); // T
   size_t num_packets = strtol(argv[2], NULL, 10); // K
-  float overhead_pct = strtof(argv[3], NULL);       // overhead pct
+  float overhead_pct = strtof(argv[3], NULL);     // overhead pct
 
   run(num_packets, packet_size, overhead_pct);
 

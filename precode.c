@@ -519,12 +519,12 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M,
     if (bitmask_check(repair_mask, gap))
       continue;
     int row = skip + gap;
-    struct repair_sym rs = kv_A(*repair_bin, rep_idx++);
+    repair_sym rs = kv_A(*repair_bin, rep_idx++);
     ocopy(om_P(*D), om_P(rs.row), row, 0, D->cols);
   }
 
   for (int row = skip + P->Kprime; rep_idx < num_repair; row++) {
-    struct repair_sym rs = kv_A(*repair_bin, rep_idx++);
+    repair_sym rs = kv_A(*repair_bin, rep_idx++);
     ocopy(om_P(*D), om_P(rs.row), row, 0, D->cols);
   }
 

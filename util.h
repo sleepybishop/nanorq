@@ -18,12 +18,19 @@
     b = __tmp;                                                                 \
   } while (0)
 
-struct repair_sym {
+typedef struct {
   uint32_t esi;
   octmat row;
-};
+} repair_sym;
 
-typedef kvec_t(struct repair_sym) repair_vec;
+typedef struct {
+  int idx;
+  size_t nz;
+  size_t od;
+  size_t cc;
+} rowstat;
+
+typedef kvec_t(repair_sym) repair_vec;
 typedef kvec_t(int) int_vec;
 
 #endif

@@ -528,10 +528,10 @@ bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
     nanorq_decode_write_esi(rq, io, sbn, esi, data, cols);
   } else {
     // save repair symbol for precode patching
-    struct repair_sym rs = {esi, OM_INITIAL};
+    repair_sym rs = {esi, OM_INITIAL};
     om_resize(&rs.row, 1, cols);
     memcpy(om_R(rs.row, 0), data, cols);
-    kv_push(struct repair_sym, dec->repair_bin, rs);
+    kv_push(repair_sym, dec->repair_bin, rs);
   }
   bitmask_set(dec->repair_mask, esi);
 

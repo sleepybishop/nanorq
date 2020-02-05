@@ -33,7 +33,7 @@ bench: benchmark
 	./benchmark 1280  2500 5.0
 	./benchmark 1280  5000 5.0	
 	./benchmark 1280 10000 5.0
-#	./benchmark 1280 50000 5.0
+	./benchmark 1280 50000 5.0
 #	./benchmark 1280 56403 5.0
 
 oblas/liboblas.a:
@@ -67,7 +67,7 @@ gcov: clean benchmark
 
 gperf: LDFLAGS = -lprofiler -ltcmalloc
 gperf: clean benchmark
-	CPUPROFILE_FREQUENCY=100000 CPUPROFILE=gperf.prof ./benchmark 1280 5000 5.0
+	CPUPROFILE_FREQUENCY=100000 CPUPROFILE=gperf.prof ./benchmark 1280 50000 5.0
 	pprof ./benchmark gperf.prof --callgrind > callgrind.gperf
 	gprof2dot --format=callgrind callgrind.gperf -z main | dot -T svg > gperf.svg
 #	pprof ./encode gperf.prof --text
@@ -75,7 +75,7 @@ gperf: clean benchmark
 gheap: LDFLAGS = -lprofiler -ltcmalloc
 gheap: clean benchmark
 	$(RM) gmem.prof.*
-	HEAPPROFILE=gmem.prof HEAP_PROFILE_INUSE_INTERVAL=1024000 ./benchmark 1280 1000 5.0
+	HEAPPROFILE=gmem.prof HEAP_PROFILE_INUSE_INTERVAL=1024000 ./benchmark 1280 50000 5.0
 	pprof ./benchmark gmem.prof.*.heap --callgrind > memgrind.gperf
 	gprof2dot --format=callgrind memgrind.gperf | dot -T svg > gheap.svg
 
