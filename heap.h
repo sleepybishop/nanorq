@@ -54,8 +54,8 @@
     }                                                                          \
   }
 
-#define HEAP_SIFTUP(name, x, y) name##_HEAP_SIFTUP(x, y)
-#define HEAP_SIFTDOWN(name, x, y) name##_HEAP_SIFTDOWN(x, y)
+#define HEAP_SIFT_UP(name, x, y) name##_HEAP_SIFT_UP(x, y)
+#define HEAP_SIFT_DOWN(name, x, y, z) name##_HEAP_SIFT_DOWN(x, y, z)
 #define HEAP_PUSH(name, x, y) name##_HEAP_PUSH(x, y)
 #define HEAP_POP(name, x, y) name##_HEAP_POP(x, y)
 #define HEAPIFY(name, x, y) name##_HEAPIFY(x, y)
