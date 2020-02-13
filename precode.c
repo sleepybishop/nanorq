@@ -376,10 +376,18 @@ static bool decode_solve(params *P, wrkmat *U, schedule *S) {
   return true;
 }
 
-static void decode_backsolve(params *P, wrkmat *U, schedule *S) {
-  int *d = S->d, row_start = S->i;
+static void decode_backsolve(params *P, spmat *AT, wrkmat *U, schedule *S) {
+  int *c = S->c, *d = S->d, row_start = S->i;
+
   for (int row = P->L - 1; row >= row_start; row--) {
-    for (int del_row = 0; del_row < row; del_row++) {
+    int_vec cs = AT->idxs[c[row]];
+    for (int it = 0; it < kv_size(cs); it++) {
+      int del_row = S->di[kv_A(cs, it)];
+      if (del_row < S->i) {
+        sched_push(S, d[del_row], d[row], 1);
+      }
+    }
+    for (int del_row = S->i; del_row < row; del_row++) {
       uint8_t beta = wrkmat_at(U, d[del_row], row - S->i);
       if (beta == 0)
         continue;
@@ -423,7 +431,7 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
     return inv_cleanup(A, AT, S, U);
 
   decode_unwind_X(P, U, S);
-  decode_backsolve(P, U, S);
+  decode_backsolve(P, AT, U, S);
   decode_rewind_X(P, U, S);
 
   inv_cleanup(A, AT, NULL, U);
