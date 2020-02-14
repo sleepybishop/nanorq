@@ -91,9 +91,9 @@ void wrkmat_axpy(wrkmat *w, int i, int j, int beta) {
     if (w->type[i]) {
       oaxpy(om_P(w->GF256), om_P(w->GF256), w->rowmap[i], w->rowmap[j], w->cols,
             beta);
-      gf2mat_xor(w->GF2, i, j);
+      gf2mat_xor(w->GF2, w->GF2, i, j);
     } else {
-      gf2mat_xor(w->GF2, i, j);
+      gf2mat_xor(w->GF2, w->GF2, i, j);
     }
   } else {
     // if target row is in gf256, axpy in place from gf2 row
