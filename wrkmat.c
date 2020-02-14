@@ -98,8 +98,10 @@ void wrkmat_axpy(wrkmat *w, int i, int j, int beta) {
   } else {
     // if target row is in gf256, axpy in place from gf2 row
     if (w->type[i]) {
-      uint8_t *tmp = om_R(w->GF256, w->rowmap[i]);
-      gf2mat_axpy(w->GF2, j, tmp, beta);
+      // uint8_t *tmp = om_R(w->GF256, w->rowmap[i]);
+      // gf2mat_axpy(w->GF2, j, tmp, beta);
+      uint32_t *tmp = w->GF2->bits + w->GF2->stride * j;
+      oaxpy_b32(om_P(w->GF256), tmp, w->rowmap[i], w->cols, beta);
     } else {
       if (w->blkidx >= w->GF256.rows) {
         printf("%s:%d -- unhandled axpy into gf2 row %d from gf256 row %d with "
