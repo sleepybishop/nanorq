@@ -19,7 +19,7 @@
     type val = a[idx];                                                         \
     while (idx > 0) {                                                          \
       size_t p = HEAP_PARENT(idx);                                             \
-      if (cmp(val, a[p]) > 0)                                                  \
+      if (cmp(&val, &a[p]) > 0)                                                \
         break;                                                                 \
       a[idx] = a[p];                                                           \
       idx = p;                                                                 \
@@ -30,9 +30,9 @@
     size_t l = idx;                                                            \
     type val = a[idx];                                                         \
     while ((l = HEAP_LEFT(l)) < n) {                                           \
-      if ((l + 1 < n) && cmp(a[l], a[l + 1]) > 0)                              \
+      if ((l + 1 < n) && cmp(&a[l], &a[l + 1]) > 0)                            \
         l++;                                                                   \
-      if (cmp(a[l], val) > 0)                                                  \
+      if (cmp(&a[l], &val) > 0)                                                \
         break;                                                                 \
       a[idx] = a[l];                                                           \
       idx = l;                                                                 \
