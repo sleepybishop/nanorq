@@ -6,7 +6,7 @@ schedule *sched_new(int rows, int cols, int estimated_ops) {
   S->ci = calloc(cols, sizeof(int));
   S->d = calloc(rows, sizeof(int));
   S->di = calloc(rows, sizeof(int));
-
+  S->nz = calloc(rows, sizeof(int));
   // init permutation vectors
   for (int j = 0; j < cols; j++) {
     S->c[j] = j;
@@ -34,6 +34,8 @@ void sched_free(schedule *S) {
     free(S->ci);
   if (S->di)
     free(S->di);
+  if (S->nz)
+    free(S->nz);
   if (kv_max(S->ops))
     kv_destroy(S->ops);
   free(S);

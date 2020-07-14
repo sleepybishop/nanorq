@@ -2,7 +2,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "heap.h"
 #include "precode.h"
+
+static int rowcmp(const rowstat *a, const rowstat *b) {
+  if (a->nz == b->nz)
+    return a->idx > b->idx;
+  return a->nz > b->nz;
+}
+
+HEAP_GENERATE(rh, rowstat, rowcmp);
 
 static void precode_matrix_permute(octmat *D, int P[], int n) {
   for (int i = 0; i < n; i++) {
@@ -200,21 +209,42 @@ static void decode_rear_swap(spmat *A, int row, int s, int e, schedule *S) {
   }
 }
 
+static void decode_sort_rows(params *P, spmat *A, schedule *S) {
+  rowstat sorted[A->rows];
+  for (int row = 0; row < A->rows; row++) {
+    sorted[row].idx = row;
+    sorted[row].nz = spmat_nnz(A, row, 0, A->cols - P->P);
+  }
+  for (int row = P->S; row < P->S + P->H; row++) {
+    sorted[row].nz = A->cols - P->P;
+  }
+
+  HEAPIFY(rh, sorted, A->rows);
+  size_t n = A->rows;
+  size_t row = 0;
+  while (n > 0) {
+    S->d[row] = sorted[0].idx;
+    S->nz[S->d[row]] = sorted[0].nz;
+    HEAP_POP(rh, sorted, n);
+    n--;
+    row++;
+  }
+
+  for (int row = 0; row < A->rows; row++) {
+    S->di[S->d[row]] = row;
+  }
+}
+
 static bool decode_amd(params *P, spmat *A, spmat *AT, schedule *S) {
   int i = 0, u = P->P, rows = A->rows, cols = A->cols;
   int *c = S->c, *d = S->d, *ci = S->ci, *di = S->di;
-
-  int counts[rows];
-  for (int row = 0; row < rows; row++) {
-    counts[d[row]] = spmat_nnz(A, d[row], 0, cols - u);
-  }
 
   while (i + u < P->L) {
     int Vrows = rows - i, Vcols = cols - i - u, V0 = i;
     int r = Vcols + 1, chosen = Vrows;
 
     for (int row = V0; row < rows - P->H; row++) {
-      int nz = counts[d[row]];
+      int nz = S->nz[d[row]];
       if (nz > 0 && nz < r) {
         chosen = row;
         r = nz;
@@ -222,7 +252,7 @@ static bool decode_amd(params *P, spmat *A, spmat *AT, schedule *S) {
           break;
       }
     }
-    if (r == Vcols + 1) {
+    if (r > Vcols) {
       return false;
     }
     if (V0 != chosen) {
@@ -239,12 +269,12 @@ static bool decode_amd(params *P, spmat *A, spmat *AT, schedule *S) {
     // decrement nz counts if row had nz at V0 or nz's at last r - 1 cols
     int_vec cs = AT->idxs[c[V0]];
     for (int it = 0; it < kv_size(cs); it++) {
-      counts[kv_A(cs, it)]--;
+      S->nz[kv_A(cs, it)]--;
     }
     for (int col = 0; col < (r - 1); col++) {
       cs = AT->idxs[c[V0 + Vcols - col - 1]];
       for (int it = 0; it < kv_size(cs); it++) {
-        counts[kv_A(cs, it)]--;
+        S->nz[kv_A(cs, it)]--;
       }
     }
     i++;
@@ -411,13 +441,7 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
   schedule *S = sched_new(rows, cols, P->L);
   wrkmat *U = NULL;
 
-  // roll precode matrix to put G_ENC rows on top
-  for (int row = 0; row < rows; row++) {
-    S->d[row] = (row + P->S + P->H) % rows;
-  }
-  for (int i = 0; i < rows; i++) {
-    S->di[S->d[i]] = i;
-  }
+  decode_sort_rows(P, A, S);
   spmat *AT = spmat_transpose(A);
 
   if (!decode_amd(P, A, AT, S))

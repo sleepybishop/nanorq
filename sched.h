@@ -12,10 +12,11 @@ struct sch_op {
 typedef kvec_t(struct sch_op) oplist;
 
 typedef struct sch {
-  int *c;     /* column permutation */
-  int *d;     /* row permutation */
-  int *ci;    /* inverse map of c */
-  int *di;    /* inverse map of d */
+  int *c;  /* column permutation */
+  int *d;  /* row permutation */
+  int *ci; /* inverse map of c */
+  int *di; /* inverse map of d */
+  int *nz;
   oplist ops; /* list of decoding operations */
   int i;      /* dim of X submatrix */
   int u;      /* remaining cols */

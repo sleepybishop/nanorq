@@ -26,8 +26,6 @@ typedef struct {
 typedef struct {
   int idx;
   size_t nz;
-  size_t od;
-  size_t cc;
 } rowstat;
 
 typedef kvec_t(repair_sym) repair_vec;

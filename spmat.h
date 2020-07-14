@@ -18,6 +18,6 @@ void spmat_free(spmat *s);
 void spmat_clear_row(spmat *s, int i);
 void spmat_push(spmat *s, int i, int j);
 spmat *spmat_transpose(spmat *s);
-int spmat_nnz(spmat *m, int row, int start, int end);
+int spmat_nnz(spmat *s, int row, int start, int end);
 
 #endif
