@@ -1,7 +1,6 @@
 OBJ=\
 bitmask.o\
 io.o\
-graph.o\
 params.o\
 precode.o\
 rand.o\
@@ -12,10 +11,10 @@ wrkmat.o\
 nanorq.o
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
-CFLAGS   = -O3 -std=c99 -Wall -I. -Ioblas
+CFLAGS   = -O3 -g -std=c99 -Wall -I. -Ioblas
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline
 
-all: benchmark libnanorq.a
+all: test libnanorq.a
 
 test: encode decode
 	$(MAKE) -f example.make
