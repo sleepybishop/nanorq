@@ -157,12 +157,48 @@ static void decode_patch(params *P, spmat *A, struct bitmask *mask,
   }
 }
 
+static void decode_sort_rows(params *P, spmat *A, schedule *S) {
+  rowstat sorted[A->rows];
+  for (int row = 0; row < A->rows; row++) {
+    sorted[row].idx = row;
+    sorted[row].nz = spmat_nnz(A, row, 0, A->cols - P->P);
+  }
+  for (int row = P->S; row < P->S + P->H; row++)
+    sorted[row].nz = A->cols - P->P;
+
+  HEAPIFY(rh, sorted, A->rows);
+  size_t n = A->rows;
+  size_t row = 0;
+  while (n > 0) {
+    S->d[row] = sorted[0].idx;
+    S->nz[S->d[row]] = sorted[0].nz;
+    HEAP_POP(rh, sorted, n);
+    n--;
+    row++;
+  }
+  for (int row = 0; row < A->rows; row++)
+    S->di[S->d[row]] = row;
+}
+
+static int decode_choose(int V0, int Vrows, int Srows, int Vcols, schedule *S) {
+  int chosen = Vrows, r = Vcols + 1;
+  for (int row = V0; row < Srows; row++) {
+    int nz = S->nz[S->d[row]];
+    if (nz > 0 && nz < r) {
+      chosen = row;
+      r = nz;
+      if (nz < 2)
+        break;
+    }
+  }
+  return chosen;
+}
+
 static int decode_nz_fwd(spmat *A, int row, int s, int e, schedule *S) {
-  int *d = S->d, *ci = S->ci;
   int min = e;
-  int_vec rs = A->idxs[d[row]];
+  int_vec rs = A->idxs[S->d[row]];
   for (int it = 0; it < kv_size(rs); it++) {
-    int col = ci[kv_A(rs, it)];
+    int col = S->ci[kv_A(rs, it)];
     if (col >= s && col < e && col < min) {
       min = col;
     }
@@ -171,15 +207,12 @@ static int decode_nz_fwd(spmat *A, int row, int s, int e, schedule *S) {
 }
 
 static int decode_nz_rev(spmat *A, int row, int s, int e, schedule *S) {
-  int *d = S->d, *ci = S->ci;
   int tailsz = 10, tail[10]; // keep track of last N and find first empty col
-
-  for (int t = 0; t < tailsz; t++) {
+  for (int t = 0; t < tailsz; t++)
     tail[t] = 0;
-  }
-  int_vec rs = A->idxs[d[row]];
+  int_vec rs = A->idxs[S->d[row]];
   for (int it = 0; it < kv_size(rs); it++) {
-    int col = ci[kv_A(rs, it)];
+    int col = S->ci[kv_A(rs, it)];
     if (col > (e - tailsz) && col < e) {
       tail[col - (e - tailsz)] = col;
     }
@@ -192,7 +225,17 @@ static int decode_nz_rev(spmat *A, int row, int s, int e, schedule *S) {
   return s;
 }
 
-static void decode_rear_swap(spmat *A, int row, int s, int e, schedule *S) {
+static void decode_swap_first_col(spmat *A, int V0, int Vcols, schedule *S) {
+  int *c = S->c, *ci = S->ci;
+  int first = decode_nz_fwd(A, V0, V0, V0 + Vcols, S);
+  if (first != V0) {
+    TMPSWAP(int, c[V0], c[first]);
+    TMPSWAP(int, ci[c[V0]], ci[c[first]]);
+  }
+}
+
+static void decode_swap_tail_cols(spmat *A, int row, int s, int e,
+                                  schedule *S) {
   while (s < e) {
     int swap1 = decode_nz_fwd(A, row, s, e, S);
     if (swap1 == e)
@@ -209,74 +252,39 @@ static void decode_rear_swap(spmat *A, int row, int s, int e, schedule *S) {
   }
 }
 
-static void decode_sort_rows(params *P, spmat *A, schedule *S) {
-  rowstat sorted[A->rows];
-  for (int row = 0; row < A->rows; row++) {
-    sorted[row].idx = row;
-    sorted[row].nz = spmat_nnz(A, row, 0, A->cols - P->P);
+static void decode_update_nnz(spmat *AT, int V0, int Vcols, int r,
+                              schedule *S) {
+  int_vec cs = AT->idxs[S->c[V0]];
+  for (int it = 0; it < kv_size(cs); it++) {
+    int row = kv_A(cs, it);
+    --S->nz[row];
   }
-  for (int row = P->S; row < P->S + P->H; row++) {
-    sorted[row].nz = A->cols - P->P;
-  }
-
-  HEAPIFY(rh, sorted, A->rows);
-  size_t n = A->rows;
-  size_t row = 0;
-  while (n > 0) {
-    S->d[row] = sorted[0].idx;
-    S->nz[S->d[row]] = sorted[0].nz;
-    HEAP_POP(rh, sorted, n);
-    n--;
-    row++;
-  }
-
-  for (int row = 0; row < A->rows; row++) {
-    S->di[S->d[row]] = row;
+  for (int col = 0; col < r - 1; col++) {
+    cs = AT->idxs[S->c[V0 + Vcols - col - 1]];
+    for (int it = 0; it < kv_size(cs); it++) {
+      int row = kv_A(cs, it);
+      --S->nz[row];
+    }
   }
 }
 
 static bool decode_amd(params *P, spmat *A, spmat *AT, schedule *S) {
-  int i = 0, u = P->P, rows = A->rows, cols = A->cols;
-  int *c = S->c, *d = S->d, *ci = S->ci, *di = S->di;
+  int i = 0, u = P->P, rows = A->rows, Srows = A->rows - P->H, cols = A->cols;
+  int *d = S->d, *di = S->di;
 
   while (i + u < P->L) {
     int Vrows = rows - i, Vcols = cols - i - u, V0 = i;
-    int r = Vcols + 1, chosen = Vrows;
-
-    for (int row = V0; row < rows - P->H; row++) {
-      int nz = S->nz[d[row]];
-      if (nz > 0 && nz < r) {
-        chosen = row;
-        r = nz;
-        if (nz < 2)
-          break;
-      }
-    }
-    if (r > Vcols) {
+    int chosen = decode_choose(V0, Vrows, Srows, Vcols, S);
+    if (chosen >= Srows)
       return false;
-    }
     if (V0 != chosen) {
       TMPSWAP(int, d[V0], d[chosen]);
       TMPSWAP(int, di[d[V0]], di[d[chosen]]);
     }
-    // find first one
-    int first = decode_nz_fwd(A, V0, V0, V0 + Vcols, S);
-    if (first != V0) {
-      TMPSWAP(int, c[V0], c[first]);
-      TMPSWAP(int, ci[c[V0]], ci[c[first]]);
-    }
-    decode_rear_swap(A, V0, V0 + 1, V0 + Vcols, S);
-    // decrement nz counts if row had nz at V0 or nz's at last r - 1 cols
-    int_vec cs = AT->idxs[c[V0]];
-    for (int it = 0; it < kv_size(cs); it++) {
-      S->nz[kv_A(cs, it)]--;
-    }
-    for (int col = 0; col < (r - 1); col++) {
-      cs = AT->idxs[c[V0 + Vcols - col - 1]];
-      for (int it = 0; it < kv_size(cs); it++) {
-        S->nz[kv_A(cs, it)]--;
-      }
-    }
+    int r = S->nz[d[V0]];
+    decode_swap_first_col(A, V0, Vcols, S);
+    decode_swap_tail_cols(A, V0, V0 + 1, V0 + Vcols, S);
+    decode_update_nnz(AT, V0, Vcols, r, S);
     i++;
     u += r - 1;
   }
