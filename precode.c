@@ -35,6 +35,12 @@ static void precode_matrix_apply_sched(octmat *D, schedule *S) {
   }
 }
 
+static void precode_matrix_make_identity(spmat *A, int dim, int m, int n) {
+  for (int diag = 0; diag < dim; diag++) {
+    spmat_push(A, m + diag, n + diag);
+  }
+}
+
 static void precode_matrix_make_LDPC1(spmat *A, int S, int B) {
   for (int col = 0; col < B; col++) {
     int submtx = col / S;
@@ -56,52 +62,25 @@ static void precode_matrix_make_LDPC2(spmat *A, int W, int S, int P) {
   }
 }
 
-static void precode_matrix_make_identity(spmat *A, int dim, int m, int n) {
-  for (int diag = 0; diag < dim; diag++) {
-    spmat_push(A, m + diag, n + diag);
-  }
-}
-
-static octmat precode_matrix_make_MT(int rows, int cols) {
-  octmat MT = OM_INITIAL;
-  om_resize(&MT, rows, cols);
-
-  for (int col = 0; col < MT.cols - 1; col++) {
-    int b1 = rnd_get(col + 1, 6, MT.rows);
-    int b2 = (b1 + rnd_get(col + 1, 7, MT.rows - 1) + 1) % MT.rows;
-    om_A(MT, b1, col) = 1;
-    om_A(MT, b2, col) = 1;
-  }
-  for (int row = 0; row < MT.rows; row++) {
-    om_A(MT, row, MT.cols - 1) = OCT_EXP[row];
-  }
-  return MT;
-}
-
 static octmat precode_matrix_make_HDPC(params *P) {
   int m = P->H;
   int n = P->Kprime + P->S;
 
-  octmat MT = precode_matrix_make_MT(m, n);
-  octmat MTxGAMMA = OM_INITIAL;
-  om_resize(&MTxGAMMA, m, n);
+  octmat HDPC = OM_INITIAL;
+  om_resize(&HDPC, m, n);
 
-  uint8_t gv[2 * n];
-  memset(gv, 0, n);
-  for (int col = n; col < 2 * n; col++) {
-    gv[col] = OCT_EXP[col % OCT_EXP_SIZE];
+  for (int row = 0; row < m; row++)
+    om_A(HDPC, row, n - 1) = OCT_EXP[row];
+
+  for (int col = n - 2; col >= 0; col--) {
+    for (int row = 0; row < m; row++)
+      om_A(HDPC, row, col) = OCT_EXP[OCT_LOG[om_A(HDPC, row, col + 1)] + 1];
+    int b1 = rnd_get(col + 1, 6, m);
+    int b2 = (b1 + rnd_get(col + 1, 7, m - 1) + 1) % m;
+    om_A(HDPC, b1, col) = om_A(HDPC, b1, col) ^ 1;
+    om_A(HDPC, b2, col) = om_A(HDPC, b2, col) ^ 1;
   }
-
-  uint8_t *ap, *cp = om_P(MTxGAMMA);
-  for (int row = 0; row < m; row++, cp += MTxGAMMA.cols_al) {
-    ap = om_P(MT) + (row * MT.cols_al);
-    for (int idx = 0; idx < n; idx++) {
-      oaxpy(cp, gv + idx, 0, 0, n, ap[idx]);
-    }
-  }
-
-  om_destroy(&MT);
-  return MTxGAMMA;
+  return HDPC;
 }
 
 static void precode_matrix_make_G_ENC(spmat *A, params *P) {
