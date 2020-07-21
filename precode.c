@@ -67,6 +67,7 @@ static octmat precode_matrix_make_HDPC(params *P) {
   int n = P->Kprime + P->S;
 
   octmat HDPC = OM_INITIAL;
+  assert(m > 0 && n > 0);
   om_resize(&HDPC, m, n);
 
   for (int row = 0; row < m; row++)

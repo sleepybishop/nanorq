@@ -1,6 +1,7 @@
 #ifndef NANORQ_UTIL_H
 #define NANORQ_UTIL_H
 
+#include <assert.h>
 #include <stdint.h>
 #include <string.h>
 
