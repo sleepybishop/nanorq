@@ -3,15 +3,15 @@
 
 #include "util.h"
 
-struct sch_op {
+typedef struct {
   uint8_t beta;
   uint32_t i;
   uint32_t j;
-};
+} sched_op;
 
-typedef kvec_t(struct sch_op) oplist;
+typedef kvec_t(sched_op) oplist;
 
-typedef struct sch {
+typedef struct {
   int *c;  /* column permutation */
   int *d;  /* row permutation */
   int *ci; /* inverse map of c */

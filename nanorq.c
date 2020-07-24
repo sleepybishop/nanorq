@@ -44,7 +44,7 @@ struct block_decoder {
   params P;
   octmat D;
   repair_vec repair_bin;
-  struct bitmask *repair_mask;
+  bitmask *repair_mask;
 };
 
 struct nanorq {

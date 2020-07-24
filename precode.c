@@ -27,7 +27,7 @@ static void precode_matrix_permute(octmat *D, int P[], int n) {
 
 static void precode_matrix_apply_sched(octmat *D, schedule *S) {
   for (int i = 0; i < kv_size(S->ops); i++) {
-    struct sch_op op = kv_A(S->ops, i);
+    sched_op op = kv_A(S->ops, i);
     if (op.beta)
       oaxpy(om_P(*D), om_P(*D), op.i, op.j, D->cols, op.beta);
     else
@@ -106,7 +106,7 @@ spmat *precode_matrix_gen(params *P, int overhead) {
   return A;
 }
 
-static void decode_patch(params *P, spmat *A, struct bitmask *mask,
+static void decode_patch(params *P, spmat *A, bitmask *mask,
                          repair_vec *repair_bin, size_t num_symbols) {
   size_t padding = P->Kprime - num_symbols;
   int num_gaps = bitmask_gaps(mask, num_symbols);
@@ -275,7 +275,7 @@ static bool decode_amd(params *P, spmat *A, spmat *AT, schedule *S) {
 
 static void decode_unwind_X(params *P, wrkmat *U, schedule *S) {
   for (int i = S->Xe; i >= S->Xs; i--) {
-    struct sch_op op = kv_A(S->ops, i);
+    sched_op op = kv_A(S->ops, i);
     wrkmat_axpy(U, op.i, op.j, op.beta);
     sched_push(S, op.i, op.j, op.beta);
   }
@@ -283,7 +283,7 @@ static void decode_unwind_X(params *P, wrkmat *U, schedule *S) {
 
 static void decode_rewind_X(params *P, wrkmat *U, schedule *S) {
   for (int i = S->Xs; i <= S->Xe; i++) {
-    struct sch_op op = kv_A(S->ops, i);
+    sched_op op = kv_A(S->ops, i);
     sched_push(S, op.i, op.j, op.beta);
   }
 }
@@ -478,8 +478,7 @@ void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr,
 }
 
 bool precode_matrix_intermediate2(params *P, spmat *A, octmat *D, octmat *M,
-                                  repair_vec *repair_bin,
-                                  struct bitmask *repair_mask,
+                                  repair_vec *repair_bin, bitmask *repair_mask,
                                   int num_symbols) {
   int num_gaps, gap = 0, row = 0;
 
@@ -506,8 +505,7 @@ bool precode_matrix_intermediate2(params *P, spmat *A, octmat *D, octmat *M,
 }
 
 bool precode_matrix_decode(params *P, octmat *D, octmat *M,
-                           repair_vec *repair_bin,
-                           struct bitmask *repair_mask) {
+                           repair_vec *repair_bin, bitmask *repair_mask) {
   int rep_idx, num_gaps, num_repair, overhead, skip = P->S + P->H;
   int num_symbols = P->K;
 
@@ -524,7 +522,7 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M,
   rep_idx = 0;
 
   if (D->rows < P->S + P->H + P->Kprime + overhead) {
-    // overhead estimate was insuffucient, have to reallocate
+    // overhead estimate was insufficient, have to reallocate
     octmat X = OM_INITIAL;
     om_resize(&X, P->S + P->H + P->Kprime + overhead, D->cols);
     memcpy(X.data, D->data, D->rows * D->cols_al);

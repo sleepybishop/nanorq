@@ -3,8 +3,8 @@
 
 #define IDXBITS 32
 
-struct bitmask *bitmask_new(size_t initial_size) {
-  struct bitmask *bm = calloc(1, sizeof(struct bitmask));
+bitmask *bitmask_new(size_t initial_size) {
+  bitmask *bm = calloc(1, sizeof(bitmask));
   size_t max_idx = (initial_size / IDXBITS) + 1;
   while (max_idx >= kv_size(bm->mask))
     kv_push(uint32_t, bm->mask, 0);
@@ -12,7 +12,7 @@ struct bitmask *bitmask_new(size_t initial_size) {
   return bm;
 }
 
-void bitmask_set(struct bitmask *bm, size_t id) {
+void bitmask_set(bitmask *bm, size_t id) {
   size_t idx = id / IDXBITS;
   while (idx >= kv_size(bm->mask))
     kv_push(uint32_t, bm->mask, 0);
@@ -21,7 +21,7 @@ void bitmask_set(struct bitmask *bm, size_t id) {
   kv_A(bm->mask, idx) |= add_mask;
 }
 
-void bitmask_clear(struct bitmask *bm, size_t id) {
+void bitmask_clear(bitmask *bm, size_t id) {
   size_t idx = id / IDXBITS;
   while (idx >= kv_size(bm->mask))
     kv_push(uint32_t, bm->mask, 0);
@@ -31,7 +31,7 @@ void bitmask_clear(struct bitmask *bm, size_t id) {
   kv_A(bm->mask, idx) &= ~clear_mask;
 }
 
-bool bitmask_check(struct bitmask *bm, size_t id) {
+bool bitmask_check(bitmask *bm, size_t id) {
   size_t idx = id / IDXBITS;
   if (idx >= kv_size(bm->mask))
     return false;
@@ -40,7 +40,7 @@ bool bitmask_check(struct bitmask *bm, size_t id) {
   return (kv_A(bm->mask, idx) & check_mask) != 0;
 }
 
-size_t bitmask_popcount(struct bitmask *bm) {
+size_t bitmask_popcount(bitmask *bm) {
   size_t popcount = 0, idx;
   for (idx = 0; idx < kv_size(bm->mask); idx++) {
     popcount += __builtin_popcountll(kv_A(bm->mask, idx));
@@ -48,7 +48,7 @@ size_t bitmask_popcount(struct bitmask *bm) {
   return popcount;
 }
 
-size_t bitmask_gaps(struct bitmask *bm, size_t until) {
+size_t bitmask_gaps(bitmask *bm, size_t until) {
   size_t gaps = 0, idx;
   size_t until_idx = (until / IDXBITS);
 
@@ -66,14 +66,14 @@ size_t bitmask_gaps(struct bitmask *bm, size_t until) {
   return gaps;
 }
 
-void bitmask_free(struct bitmask *bm) {
+void bitmask_free(bitmask *bm) {
   if (bm) {
     kv_destroy(bm->mask);
     free(bm);
   }
 }
 
-void bitmask_print(struct bitmask *bm) {
+void bitmask_print(bitmask *bm) {
   void *memory = (void *)bm->mask.a;
   size_t extent = (bm->mask.n) * sizeof(uint32_t);
   FILE *fp = stdout;

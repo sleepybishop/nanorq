@@ -18,7 +18,7 @@ schedule *sched_new(int rows, int cols, int estimated_ops) {
   }
 
   kv_init(S->ops);
-  kv_resize(struct sch_op, S->ops, estimated_ops);
+  kv_resize(sched_op, S->ops, estimated_ops);
 
   return S;
 }
@@ -42,6 +42,6 @@ void sched_free(schedule *S) {
 }
 
 void sched_push(schedule *S, int i, int j, int beta) {
-  struct sch_op op = {.i = i, .j = j, .beta = beta};
-  kv_push(struct sch_op, S->ops, op);
+  sched_op op = {.i = i, .j = j, .beta = beta};
+  kv_push(sched_op, S->ops, op);
 }
