@@ -44,7 +44,7 @@ struct block_decoder {
   params P;
   octmat D;
   repair_vec repair_bin;
-  bitmask *repair_mask;
+  bitmask repair_mask;
 };
 
 struct nanorq {
@@ -515,11 +515,11 @@ bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
   if (esi >= (1 << 20))
     return false;
 
-  if (bitmask_gaps(dec->repair_mask, dec->num_symbols) == 0) {
+  if (bitmask_gaps(&dec->repair_mask, dec->num_symbols) == 0) {
     return true; // no gaps! no repair needed.
   }
 
-  if (bitmask_check(dec->repair_mask, esi))
+  if (bitmask_check(&dec->repair_mask, esi))
     return true; // already got this esi
 
   if (esi < dec->num_symbols) {
@@ -533,7 +533,7 @@ bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
     memcpy(om_R(rs.row, 0), data, cols);
     kv_push(repair_sym, dec->repair_bin, rs);
   }
-  bitmask_set(dec->repair_mask, esi);
+  bitmask_set(&dec->repair_mask, esi);
 
   return true;
 }
@@ -544,7 +544,7 @@ size_t nanorq_num_missing(nanorq *rq, uint8_t sbn) {
   if (dec == NULL)
     return 0;
 
-  return bitmask_gaps(dec->repair_mask, num_symbols);
+  return bitmask_gaps(&dec->repair_mask, num_symbols);
 }
 
 size_t nanorq_num_repair(nanorq *rq, uint8_t sbn) {
@@ -562,8 +562,8 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
 
   params *P = &dec->P;
   octmat M = OM_INITIAL;
-  bool success =
-      precode_matrix_decode(P, &dec->D, &M, &dec->repair_bin, dec->repair_mask);
+  bool success = precode_matrix_decode(P, &dec->D, &M, &dec->repair_bin,
+                                       &dec->repair_mask);
   if (!success) {
     om_destroy(&M);
     return false;
@@ -571,10 +571,10 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
 
   int miss_row = 0;
   for (int row = 0; row < dec->num_symbols && miss_row < M.rows; row++) {
-    if (bitmask_check(dec->repair_mask, row))
+    if (bitmask_check(&dec->repair_mask, row))
       continue;
     nanorq_decode_write_esi(rq, io, sbn, row, om_R(M, miss_row), M.cols);
-    bitmask_set(dec->repair_mask, row);
+    bitmask_set(&dec->repair_mask, row);
     miss_row++;
   }
   om_destroy(&M);
@@ -592,7 +592,7 @@ void nanorq_decode_cleanup(nanorq *rq, uint8_t sbn) {
       }
       kv_destroy(dec->repair_bin);
     }
-    bitmask_free(dec->repair_mask);
+    bitmask_free(&dec->repair_mask);
     free(dec);
     rq->decoders[sbn] = NULL;
   }

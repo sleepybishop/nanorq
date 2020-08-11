@@ -7,11 +7,9 @@
 
 #include "kvec.h"
 
-typedef struct {
-  kvec_t(uint32_t) mask;
-} bitmask;
+typedef kvec_t(uint32_t) bitmask;
 
-bitmask *bitmask_new(size_t initial);
+bitmask bitmask_new(size_t initial);
 void bitmask_set(bitmask *bm, size_t id);
 void bitmask_clear(bitmask *bm, size_t id);
 bool bitmask_check(bitmask *bm, size_t id);
