@@ -10,7 +10,7 @@
 
 void dump_esi(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn,
               uint32_t esi) {
-  uint32_t tag = htobe32(nanorq_tag(sbn, esi));
+  uint32_t tag = nanorq_tag(sbn, esi);
   size_t packet_size = nanorq_symbol_size(rq);
   uint8_t data[packet_size];
   memset(data, 0, packet_size);
@@ -86,8 +86,8 @@ int main(int argc, char *argv[]) {
     nanorq_generate_symbols(rq, b, myio);
   }
 
-  uint64_t oti_common = htobe64(nanorq_oti_common(rq));
-  uint32_t oti_scheme = htobe32(nanorq_oti_scheme_specific(rq));
+  uint64_t oti_common = nanorq_oti_common(rq);
+  uint32_t oti_scheme = nanorq_oti_scheme_specific(rq);
   FILE *oh = fopen("data.rq", "w+");
   fwrite(&oti_common, 1, sizeof(oti_common), oh);
   fwrite(&oti_scheme, 1, sizeof(oti_scheme), oh);

@@ -29,8 +29,6 @@ int main(int argc, char *argv[]) {
 
   fread(&oti_common, 1, sizeof(oti_common), ih);
   fread(&oti_scheme, 1, sizeof(oti_scheme), ih);
-  oti_common = be64toh(oti_common);
-  oti_scheme = be32toh(oti_scheme);
 
   nanorq *rq = nanorq_decoder_new(oti_common, oti_scheme);
   if (rq == NULL) {
@@ -43,7 +41,6 @@ int main(int argc, char *argv[]) {
   size_t packet_size = nanorq_symbol_size(rq);
   uint8_t packet[packet_size];
   while (fread(&tag, 1, sizeof(tag), ih)) {
-    tag = be32toh(tag);
     fread(packet, packet_size, 1, ih);
     if (!nanorq_decoder_add_symbol(rq, (void *)packet, tag, myio)) {
       fprintf(stdout, "adding symbol %d failed.\n", tag);
