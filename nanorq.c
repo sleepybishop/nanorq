@@ -33,14 +33,7 @@ struct block_encoder {
   size_t sbn;
   size_t num_symbols;
   size_t symbol_size;
-  params P;
-  octmat D;
-};
-
-struct block_decoder {
-  size_t sbn;
-  size_t num_symbols;
-  size_t symbol_size;
+  bool ready;
   params P;
   octmat D;
   repair_vec repair_bin;
@@ -50,12 +43,9 @@ struct block_decoder {
 struct nanorq {
   struct oti_common common;
   struct oti_scheme scheme;
-
   struct partition src_part; /* (KL, KS, ZL, ZS) = Partition[Kt, Z] */
   struct partition sub_part; /* (TL, TS, NL, NS) = Partition[T/Al, N] */
-
   struct block_encoder *encoders[Z_max];
-  struct block_decoder *decoders[Z_max];
 };
 
 static struct oti_scheme gen_scheme_specific(struct oti_common *common, int K,
@@ -137,7 +127,8 @@ static size_t get_symbol_offset(struct source_block *blk, size_t pos,
   return i * blk->al;
 }
 
-static struct block_encoder *nanorq_block_encoder(nanorq *rq, uint8_t sbn) {
+static struct block_encoder *nanorq_block_encoder(nanorq *rq, uint8_t sbn,
+                                                  int rp) {
   size_t num_symbols = nanorq_block_symbols(rq, sbn);
   size_t symbol_size = rq->common.T / rq->common.Al;
 
@@ -152,26 +143,28 @@ static struct block_encoder *nanorq_block_encoder(nanorq *rq, uint8_t sbn) {
   enc->num_symbols = num_symbols;
   enc->symbol_size = symbol_size;
   enc->P = params_init(num_symbols);
+
+  int matrows = enc->P.S + enc->P.H + enc->P.Kprime;
+  if (rp) {
+    enc->repair_mask = bitmask_new(num_symbols);
+    matrows += (matrows / 5); // estimate 20 pct overhead
+  }
+  om_resize(&enc->D, matrows, symbol_size * rq->common.Al);
+
   rq->encoders[sbn] = enc;
   return enc;
 }
 
 bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
-  octmat D = OM_INITIAL;
-
-  struct block_encoder *enc = nanorq_block_encoder(rq, sbn);
-  params *P = NULL;
-
+  struct block_encoder *enc = nanorq_block_encoder(rq, sbn, 0);
   if (enc == NULL)
     return false;
 
-  if (enc->D.rows > 0)
+  if (enc->ready)
     return true;
 
-  P = &enc->P;
-
-  om_resize(&D, P->Kprime + P->S + P->H, enc->symbol_size * rq->common.Al);
-
+  params *P = &enc->P;
+  octmat *D = &enc->D;
   struct source_block blk = get_source_block(rq, sbn, enc->symbol_size);
   int row = P->S + P->H;
   for (; row < P->S + P->H + enc->num_symbols; row++) {
@@ -185,22 +178,21 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
 
       size_t got = 0;
       if (io->seek(io, offset)) {
-        got = io->read(io, om_R(D, row) + col, stride);
+        got = io->read(io, om_R(*D, row) + col, stride);
       }
       col += stride;
       // add padding
       for (int byte = got; byte < stride; byte++) {
-        om_A(D, row, col++) = 0;
+        om_A(*D, row, col++) = 0;
       }
     }
   }
 
   spmat *A = precode_matrix_gen(P, 0);
-  if (!precode_matrix_intermediate1(P, A, &D)) {
+  if (!precode_matrix_intermediate1(P, A, D)) {
     return false;
   }
-  enc->D = D;
-
+  enc->ready = true;
   return true;
 }
 
@@ -280,8 +272,7 @@ void nanorq_free(nanorq *rq) {
   int num_sbn = nanorq_blocks(rq);
   if (rq) {
     for (int sbn = 0; sbn < num_sbn; sbn++) {
-      nanorq_encode_cleanup(rq, sbn);
-      nanorq_decode_cleanup(rq, sbn);
+      nanorq_encoder_cleanup(rq, sbn);
     }
     free(rq);
   }
@@ -392,7 +383,7 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
                        struct ioctx *io) {
   uint64_t written = 0;
 
-  struct block_encoder *enc = nanorq_block_encoder(rq, sbn);
+  struct block_encoder *enc = nanorq_block_encoder(rq, sbn, 0);
   if (enc == NULL)
     return 0;
 
@@ -421,9 +412,9 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
   } else {
     // esi is for repair symbol
     params *P = &enc->P;
-    if (enc->D.rows == 0) {
-      bool generated = nanorq_generate_symbols(rq, sbn, io);
-      if (!generated)
+    if (!enc->ready) {
+      enc->ready = nanorq_generate_symbols(rq, sbn, io);
+      if (!enc->ready)
         return 0;
     }
 
@@ -437,42 +428,26 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
   return written;
 }
 
-void nanorq_encode_cleanup(nanorq *rq, uint8_t sbn) {
+void nanorq_encoder_cleanup(nanorq *rq, uint8_t sbn) {
   if (rq->encoders[sbn]) {
     struct block_encoder *enc = rq->encoders[sbn];
     om_destroy(&enc->D);
+    if (kv_size(enc->repair_bin) > 0) {
+      for (int rs = 0; rs < kv_size(enc->repair_bin); rs++)
+        om_destroy(&(kv_A(enc->repair_bin, rs).row));
+      kv_destroy(enc->repair_bin);
+    }
+    if (kv_size(enc->repair_mask) > 0) {
+      bitmask_free(&enc->repair_mask);
+    }
     free(enc);
     rq->encoders[sbn] = NULL;
   }
 }
 
-static struct block_decoder *nanorq_block_decoder(nanorq *rq, uint8_t sbn) {
-  size_t num_symbols = nanorq_block_symbols(rq, sbn);
-  size_t symbol_size = rq->common.T / rq->common.Al;
-
-  if (rq->decoders[sbn])
-    return rq->decoders[sbn];
-
-  if (num_symbols == 0 || symbol_size == 0)
-    return NULL;
-
-  struct block_decoder *dec = calloc(1, sizeof(struct block_decoder));
-  dec->sbn = sbn;
-  dec->num_symbols = num_symbols;
-  dec->symbol_size = symbol_size;
-  dec->P = params_init(num_symbols);
-  dec->repair_mask = bitmask_new(num_symbols);
-  int decode_rows = dec->P.S + dec->P.H + dec->P.Kprime;
-  decode_rows += (decode_rows / 5); // estimate 20 pct overhead
-  om_resize(&dec->D, decode_rows, symbol_size * rq->common.Al);
-
-  rq->decoders[sbn] = dec;
-  return dec;
-}
-
 uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io, uint8_t sbn,
                                  uint32_t esi, uint8_t *ptr, size_t dlen) {
-  struct block_decoder *dec = nanorq_block_decoder(rq, sbn);
+  struct block_encoder *dec = nanorq_block_encoder(rq, sbn, 1);
   if (dec == NULL)
     return 0;
 
@@ -505,7 +480,7 @@ bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
   uint8_t sbn = (tag >> 24) & 0xff;
   uint32_t esi = (tag & 0x00ffffff);
 
-  struct block_decoder *dec = nanorq_block_decoder(rq, sbn);
+  struct block_encoder *dec = nanorq_block_encoder(rq, sbn, 1);
 
   if (dec == NULL)
     return false;
@@ -540,7 +515,7 @@ bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
 
 size_t nanorq_num_missing(nanorq *rq, uint8_t sbn) {
   size_t num_symbols = nanorq_block_symbols(rq, sbn);
-  struct block_decoder *dec = nanorq_block_decoder(rq, sbn);
+  struct block_encoder *dec = nanorq_block_encoder(rq, sbn, 1);
   if (dec == NULL)
     return 0;
 
@@ -548,7 +523,7 @@ size_t nanorq_num_missing(nanorq *rq, uint8_t sbn) {
 }
 
 size_t nanorq_num_repair(nanorq *rq, uint8_t sbn) {
-  struct block_decoder *dec = nanorq_block_decoder(rq, sbn);
+  struct block_encoder *dec = nanorq_block_encoder(rq, sbn, 1);
   if (dec == NULL)
     return 0;
 
@@ -556,7 +531,7 @@ size_t nanorq_num_repair(nanorq *rq, uint8_t sbn) {
 }
 
 bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
-  struct block_decoder *dec = nanorq_block_decoder(rq, sbn);
+  struct block_encoder *dec = nanorq_block_encoder(rq, sbn, 1);
   if (dec == NULL)
     return 0;
 
@@ -580,20 +555,4 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   om_destroy(&M);
 
   return (nanorq_num_missing(rq, sbn) == 0);
-}
-
-void nanorq_decode_cleanup(nanorq *rq, uint8_t sbn) {
-  if (rq->decoders[sbn]) {
-    struct block_decoder *dec = rq->decoders[sbn];
-    om_destroy(&dec->D);
-    if (kv_size(dec->repair_bin) > 0) {
-      for (int rs = 0; rs < kv_size(dec->repair_bin); rs++) {
-        om_destroy(&(kv_A(dec->repair_bin, rs).row));
-      }
-      kv_destroy(dec->repair_bin);
-    }
-    bitmask_free(&dec->repair_mask);
-    free(dec);
-    rq->decoders[sbn] = NULL;
-  }
 }

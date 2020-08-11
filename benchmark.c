@@ -68,7 +68,7 @@ void dump_block(nanorq *rq, struct ioctx *myio, int sbn, symvec *packets,
     num_rep++;
   }
 
-  nanorq_encode_cleanup(rq, sbn);
+  nanorq_encoder_cleanup(rq, sbn);
 }
 
 void usage(char *prog) {
@@ -131,7 +131,7 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
       fprintf(stderr, "decode of sbn %d failed.\n", sbn);
     }
     elapsed += (usecs() - t0) / 1000000.0;
-    nanorq_decode_cleanup(rq, sbn);
+    nanorq_encoder_cleanup(rq, sbn);
   }
   nanorq_free(rq);
   return elapsed;

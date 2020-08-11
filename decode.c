@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
     if (!nanorq_repair_block(rq, myio, sbn)) {
       fprintf(stdout, "decode of sbn %d failed.\n", sbn);
     }
-    nanorq_decode_cleanup(rq, sbn);
+    nanorq_encoder_cleanup(rq, sbn);
   }
   fclose(ih);
   nanorq_free(rq);

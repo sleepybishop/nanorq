@@ -45,7 +45,7 @@ void dump_block(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn) {
     dump_esi(rq, myio, oh, sbn, esi);
     num_rep++;
   }
-  nanorq_encode_cleanup(rq, sbn);
+  nanorq_encoder_cleanup(rq, sbn);
   fprintf(stdout, "block %d is %d packets, dropped %d, created %d repair\n",
           sbn, num_esi, num_dropped, num_rep);
 }

@@ -50,8 +50,8 @@ size_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn);
 uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
                        struct ioctx *io);
 
-// cleanup encoder resouces of a given block
-void nanorq_encode_cleanup(nanorq *rq, uint8_t sbn);
+// cleanup encoder resources of a given block
+void nanorq_encoder_cleanup(nanorq *rq, uint8_t sbn);
 
 // returns a new decoder initialized with given parameters
 nanorq *nanorq_decoder_new(uint64_t common, uint32_t specific);
@@ -68,8 +68,5 @@ size_t nanorq_num_repair(nanorq *rq, uint8_t sbn);
 
 // return whether or not sbn was successfully repaired
 bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn);
-
-// cleanup decoder resouces of a given block
-void nanorq_decode_cleanup(nanorq *rq, uint8_t sbn);
 
 #endif
