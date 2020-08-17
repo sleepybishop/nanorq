@@ -3,8 +3,10 @@
 *.bin
 *.swp
 *.rq
+*.gcno
 war_and_peace.txt
 peace_and_war.txt
 encode
 decode
 benchmark
+.DS_Store
