@@ -14,12 +14,12 @@ struct fileioctx {
   FILE *fp;
 };
 
-static size_t fileio_read(struct ioctx *io, void *buf, size_t len) {
+static size_t fileio_read(struct ioctx *io, uint8_t *buf, size_t len) {
   struct fileioctx *_io = (struct fileioctx *)io;
   return fread(buf, 1, len, _io->fp);
 }
 
-static size_t fileio_write(struct ioctx *io, const void *buf, size_t len) {
+static size_t fileio_write(struct ioctx *io, const uint8_t *buf, size_t len) {
   struct fileioctx *_io = (struct fileioctx *)io;
   return fwrite(buf, 1, len, _io->fp);
 }
@@ -86,7 +86,7 @@ struct memioctx {
   size_t size;
 };
 
-static size_t memio_read(struct ioctx *io, void *buf, size_t len) {
+static size_t memio_read(struct ioctx *io, uint8_t *buf, size_t len) {
   struct memioctx *_io = (struct memioctx *)io;
   if (_io->pos + len > _io->size) {
     size_t diff = _io->size - _io->pos;
@@ -99,7 +99,7 @@ static size_t memio_read(struct ioctx *io, void *buf, size_t len) {
   return len;
 }
 
-static size_t memio_write(struct ioctx *io, const void *buf, size_t len) {
+static size_t memio_write(struct ioctx *io, const uint8_t *buf, size_t len) {
   struct memioctx *_io = (struct memioctx *)io;
   if (_io->pos + len > _io->size) {
     size_t diff = _io->size - _io->pos;
@@ -235,7 +235,7 @@ static bool mmapio_seek(struct ioctx *io, const size_t offset) {
   return false;
 }
 
-static size_t mmapio_read(struct ioctx *io, void *buf, size_t len) {
+static size_t mmapio_read(struct ioctx *io, uint8_t *buf, size_t len) {
   struct mmapioctx *_io = (struct mmapioctx *)io;
 
   size_t at = _io->pos % _io->mapsize;
@@ -276,7 +276,7 @@ static size_t mmapio_read(struct ioctx *io, void *buf, size_t len) {
   return 0;
 }
 
-static size_t mmapio_write(struct ioctx *io, const void *buf, size_t len) {
+static size_t mmapio_write(struct ioctx *io, const uint8_t *buf, size_t len) {
   struct mmapioctx *_io = (struct mmapioctx *)io;
   size_t written = 0, at = 0;
 

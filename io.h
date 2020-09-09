@@ -5,8 +5,8 @@
 #include <stdint.h>
 
 struct ioctx {
-  size_t (*read)(struct ioctx *, void *, size_t);
-  size_t (*write)(struct ioctx *, const void *, size_t);
+  size_t (*read)(struct ioctx *, uint8_t *, size_t);
+  size_t (*write)(struct ioctx *, const uint8_t *, size_t);
   bool (*seek)(struct ioctx *, const size_t);
   size_t (*size)(struct ioctx *);
   long (*tell)(struct ioctx *);
