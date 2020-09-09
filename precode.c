@@ -11,7 +11,7 @@ static int rowcmp(const rowstat *a, const rowstat *b) {
   return a->nz > b->nz;
 }
 
-HEAP_GENERATE(rh, rowstat, rowcmp);
+HEAP_GENERATE(rh, rowstat, rowcmp)
 
 static void precode_matrix_permute(octmat *D, int P[], int n) {
   for (int i = 0; i < n; i++) {
@@ -107,9 +107,9 @@ spmat *precode_matrix_gen(params *P, int overhead) {
 }
 
 static void decode_patch(params *P, spmat *A, bitmask *mask,
-                         repair_vec *repair_bin, size_t num_symbols) {
-  size_t padding = P->Kprime - num_symbols;
-  int num_gaps = bitmask_gaps(mask, num_symbols);
+                         repair_vec *repair_bin) {
+  size_t padding = P->Kprime - P->K;
+  int num_gaps = bitmask_gaps(mask, P->K);
   int rep_idx = 0;
   for (int gap = 0; gap < P->L && num_gaps > 0; gap++) {
     if (bitmask_check(mask, gap))
@@ -478,23 +478,23 @@ void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr,
 }
 
 bool precode_matrix_intermediate2(params *P, spmat *A, octmat *D, octmat *M,
-                                  repair_vec *repair_bin, bitmask *repair_mask,
-                                  int num_symbols) {
+                                  repair_vec *repair_bin,
+                                  bitmask *repair_mask) {
   int num_gaps, gap = 0, row = 0;
 
   if (D->cols == 0) {
     return false;
   }
 
-  decode_patch(P, A, repair_mask, repair_bin, num_symbols);
+  decode_patch(P, A, repair_mask, repair_bin);
 
   if (!precode_matrix_intermediate1(P, A, D)) {
     return false;
   }
 
-  num_gaps = bitmask_gaps(repair_mask, num_symbols);
+  num_gaps = bitmask_gaps(repair_mask, P->K);
   om_resize(M, num_gaps, D->cols);
-  for (gap = 0; gap < num_symbols && num_gaps > 0; gap++) {
+  for (gap = 0; gap < P->K && num_gaps > 0; gap++) {
     if (bitmask_check(repair_mask, gap))
       continue;
     precode_matrix_fill_slot(P, D, gap, om_R(*M, row), M->cols);
@@ -506,11 +506,9 @@ bool precode_matrix_intermediate2(params *P, spmat *A, octmat *D, octmat *M,
 
 bool precode_matrix_decode(params *P, octmat *D, octmat *M,
                            repair_vec *repair_bin, bitmask *repair_mask) {
-  int rep_idx, num_gaps, num_repair, overhead, skip = P->S + P->H;
-  int num_symbols = P->K;
-
-  num_repair = kv_size(*repair_bin);
-  num_gaps = bitmask_gaps(repair_mask, num_symbols);
+  int rep_idx = 0, overhead, skip = P->S + P->H;
+  int num_repair = kv_size(*repair_bin);
+  int num_gaps = bitmask_gaps(repair_mask, P->K);
 
   if (num_gaps == 0)
     return true;
@@ -519,7 +517,6 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M,
     return false;
 
   overhead = num_repair - num_gaps;
-  rep_idx = 0;
 
   if (D->rows < P->S + P->H + P->Kprime + overhead) {
     // overhead estimate was insufficient, have to reallocate
@@ -533,7 +530,7 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M,
   }
   D->rows = P->S + P->H + P->Kprime + overhead;
 
-  for (int gap = 0; gap < num_symbols && rep_idx < num_repair; gap++) {
+  for (int gap = 0; gap < P->K && rep_idx < num_repair; gap++) {
     if (bitmask_check(repair_mask, gap))
       continue;
     int row = skip + gap;
@@ -547,7 +544,7 @@ bool precode_matrix_decode(params *P, octmat *D, octmat *M,
   }
 
   spmat *A = precode_matrix_gen(P, overhead);
-  bool precode_ok = precode_matrix_intermediate2(P, A, D, M, repair_bin,
-                                                 repair_mask, num_symbols);
+  bool precode_ok =
+      precode_matrix_intermediate2(P, A, D, M, repair_bin, repair_mask);
   return precode_ok;
 }
