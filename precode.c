@@ -304,21 +304,36 @@ static void decode_fwd_GE(wrkmat *U, schedule *S, spmat *AT, int s, int e) {
   }
 }
 
-static wrkmat *decode_make_U(params *P, spmat *A, spmat *AT, schedule *S) {
-  int rows = A->rows, row_start = S->i;
-  int *c = S->c, *d = S->d, *ci = S->ci;
-
-  // build U upper from indexes
-  wrkmat *U = wrkmat_new(rows, S->u);
-  for (int i = 0; i < rows; i++) {
+static void decode_fill_U_upper(wrkmat *U, spmat *A, spmat *AT, schedule *S) {
+  for (int i = 0; i < A->rows; i++) {
     int_vec rs = A->idxs[i];
     for (int it = 0; it < kv_size(rs); it++) {
-      int col = ci[kv_A(rs, it)];
-      if (col >= S->i) {
+      int col = S->ci[kv_A(rs, it)];
+      if (col >= S->i)
         wrkmat_set(U, i, col - S->i, 1);
-      }
     }
   }
+}
+
+static void decode_fill_U_lower(wrkmat *U, octmat *HDPC, params *P,
+                                schedule *S) {
+  octmat UL = OM_INITIAL;
+  om_resize(&UL, P->H, S->u);
+  for (int row = 0; row < UL.rows; row++) {
+    for (int col = 0; col < UL.cols - P->H; col++)
+      om_A(UL, row, col) =
+          om_A(*HDPC, row, S->c[HDPC->cols - (S->u - P->H) + col]);
+    om_A(UL, row, row + (UL.cols - P->H)) = 1;
+  }
+  wrkmat_assign_block(U, &UL, P->S, 0, P->H, S->u);
+}
+
+static wrkmat *decode_make_U(params *P, spmat *A, spmat *AT, schedule *S) {
+  int rows = A->rows, row_start = S->i;
+  int *c = S->c, *d = S->d;
+
+  wrkmat *U = wrkmat_new(rows, S->u);
+  decode_fill_U_upper(U, A, AT, S);
 
   // forward GE on U upper
   decode_fwd_GE(U, S, AT, 0, S->i);
@@ -328,15 +343,7 @@ static wrkmat *decode_make_U(params *P, spmat *A, spmat *AT, schedule *S) {
 
   // build U lower from rightmost cols of HDPC and I_H
   octmat HDPC = precode_matrix_make_HDPC(P);
-  octmat UL = OM_INITIAL;
-  om_resize(&UL, P->H, S->u);
-  for (int row = 0; row < UL.rows; row++) {
-    for (int col = 0; col < UL.cols - P->H; col++) {
-      om_A(UL, row, col) = om_A(HDPC, row, c[HDPC.cols - (S->u - P->H) + col]);
-    }
-    om_A(UL, row, row + (UL.cols - P->H)) = 1;
-  }
-  wrkmat_assign_block(U, &UL, P->S, 0, P->H, S->u);
+  decode_fill_U_lower(U, &HDPC, P, S);
 
   // forward GE on HDPC rows
   for (int row = 0; row < row_start; row++) {
