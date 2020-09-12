@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "bitmask.h"
 #include "nanorq.h"
 #include "precode.h"
 
@@ -156,7 +157,7 @@ static struct block_encoder *nanorq_block_encoder(nanorq *rq, uint8_t sbn,
   return enc;
 }
 
-static bool load_sbn(nanorq *rq, uint8_t sbn, struct ioctx *io) {
+static bool load_symbol_matrix(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   struct block_encoder *enc = nanorq_block_encoder(rq, sbn, 0);
   if (enc == NULL)
     return false;
@@ -184,6 +185,17 @@ static bool load_sbn(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   return true;
 }
 
+void decode_row(params *P, octmat *D, uint32_t row, uint8_t *ptr, size_t len) {
+  int_vec idxs = params_get_idxs(row, P);
+  memset(ptr, 0, len);
+  for (int idx = 0; idx < kv_size(idxs); idx++) {
+    const uint8_t *tmp = om_R(*D, kv_A(idxs, idx));
+    for (int i = 0; i < len; i++)
+      ptr[i] ^= tmp[i]; // ptr is unaligned, xor instead of oblas[oaddrow]
+  }
+  kv_destroy(idxs);
+}
+
 bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   struct block_encoder *enc = nanorq_block_encoder(rq, sbn, 0);
   if (enc == NULL)
@@ -192,14 +204,14 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   if (enc->inverted)
     return true;
   if (!enc->loaded)
-    enc->loaded = load_sbn(rq, sbn, io);
+    enc->loaded = load_symbol_matrix(rq, sbn, io);
   if (!enc->loaded)
     return false;
 
   params *P = &enc->P;
   octmat *D = &enc->D;
   spmat *A = precode_matrix_gen(P, 0);
-  if (!precode_matrix_intermediate1(P, A, D))
+  if (!precode_matrix_intermediate(P, A, D))
     return false;
   enc->inverted = true;
   return true;
@@ -398,11 +410,11 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
   params *P = &enc->P;
   if (esi < enc->num_symbols) {
     if (enc->inverted) {
-      precode_matrix_fill_slot(P, &enc->D, esi, data, enc->D.cols);
+      decode_row(P, &enc->D, esi, data, enc->D.cols);
       written += enc->D.cols;
     } else {
       if (!enc->loaded)
-        enc->loaded = load_sbn(rq, sbn, io);
+        enc->loaded = load_symbol_matrix(rq, sbn, io);
       if (enc->loaded) {
         memcpy(data, om_R(enc->D, enc->P.S + enc->P.H + esi), enc->D.cols);
         written += enc->D.cols;
@@ -414,7 +426,7 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
       enc->inverted = nanorq_generate_symbols(rq, sbn, io);
     if (enc->inverted) {
       uint32_t isi = esi + (P->Kprime - enc->num_symbols);
-      precode_matrix_fill_slot(P, &enc->D, isi, data, enc->D.cols);
+      decode_row(P, &enc->D, isi, data, enc->D.cols);
       written += enc->D.cols;
     }
   }
@@ -438,8 +450,9 @@ void nanorq_encoder_cleanup(nanorq *rq, uint8_t sbn) {
   }
 }
 
-uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io, uint8_t sbn,
-                                 uint32_t esi, uint8_t *ptr, size_t dlen) {
+static uint64_t nanorq_decode_write_esi(nanorq *rq, struct ioctx *io,
+                                        uint8_t sbn, uint32_t esi, uint8_t *ptr,
+                                        size_t dlen) {
   struct block_encoder *dec = nanorq_block_encoder(rq, sbn, 1);
   if (dec == NULL)
     return 0;
@@ -523,29 +536,122 @@ size_t nanorq_num_repair(nanorq *rq, uint8_t sbn) {
   return kv_size(dec->repair_bin);
 }
 
+static void patch_precode_matrix(params *P, spmat *A, int num_gaps,
+                                 bitmask *mask, repair_vec *repair_bin) {
+  size_t padding = P->Kprime - P->K;
+  int rep_idx = 0;
+  for (int gap = 0; gap < P->L && num_gaps > 0; gap++) {
+    if (bitmask_check(mask, gap))
+      continue;
+    int row = gap + P->H + P->S;
+    spmat_clear_row(A, row);
+
+    int_vec idxs =
+        params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
+    for (int idx = 0; idx < kv_size(idxs); idx++) {
+      spmat_push(A, row, kv_A(idxs, idx));
+    }
+    kv_destroy(idxs);
+    num_gaps--;
+  }
+
+  for (int rep_row = P->L; rep_row < A->rows; rep_row++) {
+    spmat_clear_row(A, rep_row);
+    int_vec idxs =
+        params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
+    for (int idx = 0; idx < kv_size(idxs); idx++) {
+      spmat_push(A, rep_row, kv_A(idxs, idx));
+    }
+    kv_destroy(idxs);
+  }
+}
+
+static void resize_symbol_matrix(params *P, octmat *D, int overhead) {
+  if (D->rows < P->S + P->H + P->Kprime + overhead) {
+    octmat X = OM_INITIAL;
+    om_resize(&X, P->S + P->H + P->Kprime + overhead, D->cols);
+    memcpy(X.data, D->data, D->rows * D->cols_al);
+    uint8_t *tmp = D->data;
+    D->data = X.data;
+    X.data = tmp;
+    om_destroy(&X);
+  }
+  D->rows = P->S + P->H + P->Kprime + overhead;
+}
+
+static void fill_symbol_matrix_gaps(params *P, octmat *D, bitmask *repair_mask,
+                                    repair_vec *repair_bin) {
+  int rep_idx = 0, skip = P->S + P->H, num_repair = kv_size(*repair_bin);
+  for (int gap = 0; gap < P->K && rep_idx < num_repair; gap++) {
+    if (bitmask_check(repair_mask, gap))
+      continue;
+    int row = skip + gap;
+    repair_sym rs = kv_A(*repair_bin, rep_idx++);
+    ocopy(om_P(*D), om_P(rs.row), row, 0, D->cols);
+  }
+
+  for (int row = skip + P->Kprime; rep_idx < num_repair; row++) {
+    repair_sym rs = kv_A(*repair_bin, rep_idx++);
+    ocopy(om_P(*D), om_P(rs.row), row, 0, D->cols);
+  }
+}
+
+static void decode_repair_rows(params *P, octmat *D, octmat *M, int num_gaps,
+                               bitmask *repair_mask) {
+  om_resize(M, num_gaps, D->cols);
+  for (int gap = 0, row = 0; gap < P->K && num_gaps > 0; gap++) {
+    if (bitmask_check(repair_mask, gap))
+      continue;
+    decode_row(P, D, gap, om_R(*M, row), M->cols);
+    row++;
+    num_gaps--;
+  }
+}
+
+static void write_repair_rows(nanorq *rq, uint8_t sbn, int K, struct ioctx *io,
+                              octmat *M, bitmask *repair_mask) {
+  for (int row = 0, miss_row = 0; row < K && miss_row < M->rows; row++) {
+    if (bitmask_check(repair_mask, row))
+      continue;
+    nanorq_decode_write_esi(rq, io, sbn, row, om_R(*M, miss_row), M->cols);
+    bitmask_set(repair_mask, row);
+    miss_row++;
+  }
+}
+
 bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
+  int overhead, num_repair, num_gaps;
   struct block_encoder *dec = nanorq_block_encoder(rq, sbn, 1);
   if (dec == NULL)
     return 0;
 
   params *P = &dec->P;
-  octmat M = OM_INITIAL;
-  bool success = precode_matrix_decode(P, &dec->D, &M, &dec->repair_bin,
-                                       &dec->repair_mask);
-  if (!success) {
-    om_destroy(&M);
+  octmat *D = &dec->D;
+  octmat RM = OM_INITIAL, *M = &RM;
+  bitmask *repair_mask = &dec->repair_mask;
+  repair_vec *repair_bin = &dec->repair_bin;
+
+  num_repair = kv_size(*repair_bin);
+  num_gaps = bitmask_gaps(repair_mask, P->K);
+  if (num_gaps == 0)
+    return true;
+  if (num_repair < num_gaps)
+    return false;
+  overhead = num_repair - num_gaps;
+
+  resize_symbol_matrix(P, D, overhead);
+  fill_symbol_matrix_gaps(P, D, repair_mask, repair_bin);
+  spmat *A = precode_matrix_gen(P, overhead);
+  patch_precode_matrix(P, A, num_gaps, repair_mask, repair_bin);
+
+  bool ok = precode_matrix_intermediate(P, A, D);
+  if (!ok) {
+    om_destroy(M);
     return false;
   }
-
-  int miss_row = 0;
-  for (int row = 0; row < dec->num_symbols && miss_row < M.rows; row++) {
-    if (bitmask_check(&dec->repair_mask, row))
-      continue;
-    nanorq_decode_write_esi(rq, io, sbn, row, om_R(M, miss_row), M.cols);
-    bitmask_set(&dec->repair_mask, row);
-    miss_row++;
-  }
-  om_destroy(&M);
+  decode_repair_rows(P, D, M, num_gaps, repair_mask);
+  write_repair_rows(rq, sbn, P->K, io, M, repair_mask);
+  om_destroy(M);
 
   return (nanorq_num_missing(rq, sbn) == 0);
 }
