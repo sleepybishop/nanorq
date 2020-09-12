@@ -33,7 +33,8 @@ struct block_encoder {
   size_t sbn;
   size_t num_symbols;
   size_t symbol_size;
-  bool ready;
+  bool loaded;
+  bool inverted;
   params P;
   octmat D;
   repair_vec repair_bin;
@@ -155,13 +156,10 @@ static struct block_encoder *nanorq_block_encoder(nanorq *rq, uint8_t sbn,
   return enc;
 }
 
-bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
+static bool load_sbn(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   struct block_encoder *enc = nanorq_block_encoder(rq, sbn, 0);
   if (enc == NULL)
     return false;
-
-  if (enc->ready)
-    return true;
 
   params *P = &enc->P;
   octmat *D = &enc->D;
@@ -174,25 +172,36 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
       size_t offset = get_symbol_offset(&blk, i, enc->num_symbols, esi);
       size_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
       size_t stride = sublen * rq->common.Al;
-      i += sublen;
-
       size_t got = 0;
-      if (io->seek(io, offset)) {
+      i += sublen;
+      if (io->seek(io, offset))
         got = io->read(io, om_R(*D, row) + col, stride);
-      }
       col += stride;
-      // add padding
-      for (int byte = got; byte < stride; byte++) {
-        om_A(*D, row, col++) = 0;
-      }
+      for (int byte = got; byte < stride; byte++)
+        om_A(*D, row, col++) = 0; // padding
     }
   }
+  return true;
+}
 
-  spmat *A = precode_matrix_gen(P, 0);
-  if (!precode_matrix_intermediate1(P, A, D)) {
+bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
+  struct block_encoder *enc = nanorq_block_encoder(rq, sbn, 0);
+  if (enc == NULL)
     return false;
-  }
-  enc->ready = true;
+
+  if (enc->inverted)
+    return true;
+  if (!enc->loaded)
+    enc->loaded = load_sbn(rq, sbn, io);
+  if (!enc->loaded)
+    return false;
+
+  params *P = &enc->P;
+  octmat *D = &enc->D;
+  spmat *A = precode_matrix_gen(P, 0);
+  if (!precode_matrix_intermediate1(P, A, D))
+    return false;
+  enc->inverted = true;
   return true;
 }
 
@@ -382,48 +391,36 @@ size_t nanorq_blocks(nanorq *rq) {
 uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
                        struct ioctx *io) {
   uint64_t written = 0;
-
   struct block_encoder *enc = nanorq_block_encoder(rq, sbn, 0);
   if (enc == NULL)
     return 0;
 
+  uint8_t tmp[enc->D.cols_al];
+  params *P = &enc->P;
+  memset(tmp, 0, enc->D.cols_al);
   if (esi < enc->num_symbols) {
-    struct source_block blk = get_source_block(rq, sbn, enc->symbol_size);
-    uint8_t *dst = ((uint8_t *)data);
-    for (int i = 0; i < enc->symbol_size;) {
-      size_t offset = get_symbol_offset(&blk, i, enc->num_symbols, esi);
-      size_t sublen = (i < blk.part_tot) ? blk.part.IL : blk.part.IS;
-      size_t stride = sublen * rq->common.Al;
-      i += sublen;
-
-      int got = 0;
-      if (io->seek(io, offset)) {
-        got = io->read(io, data, stride);
-      }
-      written += got;
-      dst += got;
-      // add padding
-      for (int byte = got; byte < stride; byte++) {
-        *dst = 0;
-        dst++;
-        written++;
+    if (enc->inverted) {
+      precode_matrix_fill_slot(P, &enc->D, esi, tmp, enc->D.cols);
+      memcpy(data, tmp, enc->D.cols);
+      written += enc->D.cols;
+    } else {
+      if (!enc->loaded)
+        enc->loaded = load_sbn(rq, sbn, io);
+      if (enc->loaded) {
+        memcpy(data, om_R(enc->D, enc->P.S + enc->P.H + esi), enc->D.cols);
+        written += enc->D.cols;
       }
     }
   } else {
     // esi is for repair symbol
-    params *P = &enc->P;
-    if (!enc->ready) {
-      enc->ready = nanorq_generate_symbols(rq, sbn, io);
-      if (!enc->ready)
-        return 0;
+    if (!enc->inverted)
+      enc->inverted = nanorq_generate_symbols(rq, sbn, io);
+    if (enc->inverted) {
+      uint32_t isi = esi + (P->Kprime - enc->num_symbols);
+      precode_matrix_fill_slot(P, &enc->D, isi, tmp, enc->D.cols);
+      memcpy(data, tmp, enc->D.cols);
+      written += enc->D.cols;
     }
-
-    uint32_t isi = esi + (P->Kprime - enc->num_symbols);
-    uint8_t tmp[enc->D.cols_al];
-    memset(tmp, 0, enc->D.cols_al);
-    precode_matrix_fill_slot(P, &enc->D, isi, tmp, enc->D.cols);
-    memcpy(data, tmp, enc->symbol_size * rq->common.Al);
-    written += enc->symbol_size * rq->common.Al;
   }
   return written;
 }
