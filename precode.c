@@ -478,8 +478,11 @@ bool precode_matrix_intermediate1(params *P, spmat *A, octmat *D) {
 void precode_matrix_fill_slot(params *P, octmat *D, uint32_t isi, uint8_t *ptr,
                               size_t len) {
   int_vec idxs = params_get_idxs(isi, P);
+  memset(ptr, 0, len);
   for (int idx = 0; idx < kv_size(idxs); idx++) {
-    oaddrow(ptr, om_P(*D), 0, kv_A(idxs, idx), len);
+    uint8_t *row = om_R(*D, kv_A(idxs, idx));
+    for (int i = 0; i < len; i++)
+      ptr[i] ^= row[i]; // ptr is unaligned, xor instead of oblas[oaddrow]
   }
   kv_destroy(idxs);
 }

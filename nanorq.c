@@ -395,13 +395,10 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
   if (enc == NULL)
     return 0;
 
-  uint8_t tmp[enc->D.cols_al];
   params *P = &enc->P;
-  memset(tmp, 0, enc->D.cols_al);
   if (esi < enc->num_symbols) {
     if (enc->inverted) {
-      precode_matrix_fill_slot(P, &enc->D, esi, tmp, enc->D.cols);
-      memcpy(data, tmp, enc->D.cols);
+      precode_matrix_fill_slot(P, &enc->D, esi, data, enc->D.cols);
       written += enc->D.cols;
     } else {
       if (!enc->loaded)
@@ -417,8 +414,7 @@ uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
       enc->inverted = nanorq_generate_symbols(rq, sbn, io);
     if (enc->inverted) {
       uint32_t isi = esi + (P->Kprime - enc->num_symbols);
-      precode_matrix_fill_slot(P, &enc->D, isi, tmp, enc->D.cols);
-      memcpy(data, tmp, enc->D.cols);
+      precode_matrix_fill_slot(P, &enc->D, isi, data, enc->D.cols);
       written += enc->D.cols;
     }
   }
