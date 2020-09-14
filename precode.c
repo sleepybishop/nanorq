@@ -1,13 +1,4 @@
 #include "precode.h"
-#include "heap.h"
-
-static int rowcmp(const rowstat *a, const rowstat *b) {
-  if (a->nz == b->nz)
-    return a->idx > b->idx;
-  return a->nz > b->nz;
-}
-
-HEAP_GENERATE(rh, rowstat, rowcmp)
 
 static void precode_matrix_permute(octmat *D, int P[], int n) {
   for (int i = 0; i < n; i++) {
@@ -99,31 +90,28 @@ spmat *precode_matrix_gen(params *P, int overhead) {
 }
 
 static void precode_matrix_sort(params *P, spmat *A, schedule *S) {
-  rowstat sorted[A->rows];
-  for (int row = 0; row < A->rows; row++) {
-    sorted[row].idx = row;
-    sorted[row].nz = spmat_nnz(A, row, 0, A->cols - P->P);
-  }
-  for (int row = P->S; row < P->S + P->H; row++)
-    sorted[row].nz = A->cols - P->P;
-
-  HEAPIFY(rh, sorted, A->rows);
-  size_t n = A->rows;
-  size_t row = 0;
-  while (n > 0) {
-    S->d[row] = sorted[0].idx;
-    S->nz[S->d[row]] = sorted[0].nz;
-    HEAP_POP(rh, sorted, n);
-    n--;
-    row++;
-  }
   for (int row = 0; row < A->rows; row++)
-    S->di[S->d[row]] = row;
+    S->d[row] = (row + P->S + P->H) % A->rows; // move HDPC to bottom
+  for (int i = 0; i < A->rows; i++)
+    S->di[S->d[i]] = i;
+  for (int row = 0; row < A->rows; row++) {
+    S->nz[S->d[row]] = spmat_nnz(A, S->d[row], 0, A->cols - P->P);
+    if (S->nz[S->d[row]] == 0)
+      S->nz[S->d[row]] = A->cols;
+  }
 }
 
 static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
-                                 schedule *S) {
+                                 schedule *S, spmat *NZT) {
   int chosen = Vrows, r = Vcols + 1;
+  for (int b = 1; b < 3; b++) {
+    int_vec ns = NZT->idxs[b];
+    while (kv_size(ns) > 0) {
+      chosen = kv_pop(ns);
+      if (S->di[chosen] >= V0 && S->nz[chosen] == b)
+        return S->di[chosen];
+    }
+  }
   for (int row = V0; row < Srows; row++) {
     int nz = S->nz[S->d[row]];
     if (nz > 0 && nz < r) {
@@ -196,17 +184,21 @@ static void precode_matrix_swap_tail_cols(spmat *A, int row, int s, int e,
 }
 
 static void precode_matrix_update_nnz(spmat *AT, int V0, int Vcols, int r,
-                                      schedule *S) {
+                                      schedule *S, spmat *NZT) {
   int_vec cs = AT->idxs[S->c[V0]];
   for (int it = 0; it < kv_size(cs); it++) {
     int row = kv_A(cs, it);
-    --S->nz[row];
+    int nz = --S->nz[row];
+    if (nz > 0 && nz < 3)
+      spmat_push(NZT, nz, row);
   }
   for (int col = 0; col < r - 1; col++) {
     cs = AT->idxs[S->c[V0 + Vcols - col - 1]];
     for (int it = 0; it < kv_size(cs); it++) {
       int row = kv_A(cs, it);
-      --S->nz[row];
+      int nz = --S->nz[row];
+      if (nz > 0 && nz < 3)
+        spmat_push(NZT, nz, row);
     }
   }
 }
@@ -216,9 +208,14 @@ static bool precode_matrix_precond(params *P, spmat *A, spmat *AT,
   int i = 0, u = P->P, rows = A->rows, Srows = A->rows - P->H, cols = A->cols;
   int *d = S->d, *di = S->di;
 
+  spmat *NZT = spmat_new(3, rows);
+  for (int row = 0; row < Srows; row++) {
+    if (S->nz[row] < 3)
+      spmat_push(NZT, S->nz[row], row);
+  }
   while (i + u < P->L) {
     int Vrows = rows - i, Vcols = cols - i - u, V0 = i;
-    int chosen = precode_matrix_choose(V0, Vrows, Srows, Vcols, S);
+    int chosen = precode_matrix_choose(V0, Vrows, Srows, Vcols, S, NZT);
     if (chosen >= Srows)
       return false;
     if (V0 != chosen) {
@@ -228,10 +225,11 @@ static bool precode_matrix_precond(params *P, spmat *A, spmat *AT,
     int r = S->nz[d[V0]];
     precode_matrix_swap_first_col(A, V0, Vcols, S);
     precode_matrix_swap_tail_cols(A, V0, V0 + 1, V0 + Vcols, S);
-    precode_matrix_update_nnz(AT, V0, Vcols, r, S);
+    precode_matrix_update_nnz(AT, V0, Vcols, r, S, NZT);
     i++;
     u += r - 1;
   }
+  spmat_free(NZT);
   S->i = i;
   S->u = u;
   return true;

@@ -24,11 +24,6 @@ typedef struct {
   octmat row;
 } repair_sym;
 
-typedef struct {
-  int idx;
-  size_t nz;
-} rowstat;
-
 typedef kvec_t(repair_sym) repair_vec;
 typedef kvec_t(int) int_vec;
 
