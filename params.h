@@ -6,7 +6,6 @@
 #include <stdbool.h>
 
 typedef struct {
-  uint16_t K;
   uint16_t Kprime;
   uint16_t S;
   uint16_t H;

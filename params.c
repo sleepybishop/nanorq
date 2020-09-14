@@ -20,7 +20,7 @@ static bool is_prime(uint16_t n) {
 }
 
 params params_init(uint16_t K) {
-  params P = {.K = K};
+  params P;
 
   for (int i = 0; i < K_padded_size; i++) {
     if (K <= K_padded[i]) {

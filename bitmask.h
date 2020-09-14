@@ -15,6 +15,7 @@ void bitmask_clear(bitmask *bm, size_t id);
 bool bitmask_check(bitmask *bm, size_t id);
 size_t bitmask_popcount(bitmask *bm);
 size_t bitmask_gaps(bitmask *bm, size_t until);
+void bitmask_reset(bitmask *bm);
 void bitmask_free(bitmask *bm);
 void bitmask_print(bitmask *bm);
 

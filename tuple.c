@@ -29,15 +29,15 @@ tuple gen_tuple(uint32_t X, params *P) {
   uint32_t y = (uint32_t)((B1 + X * A));
   uint32_t v = rnd_get(y, 0, (uint32_t)((1 << 20)));
   ret.d = deg(v, P->W);
-  ret.a = 1 + (uint16_t)(rnd_get(y, 1, P->W - 1));
-  ret.b = (uint16_t)(rnd_get(y, 2, P->W));
+  ret.a = 1 + rnd_get(y, 1, P->W - 1);
+  ret.b = rnd_get(y, 2, P->W);
   if (ret.d < 4) {
-    ret.d1 = 2 + (uint16_t)(rnd_get(X, 3, 2));
+    ret.d1 = 2 + rnd_get(X, 3, 2);
   } else {
     ret.d1 = 2;
   }
-  ret.a1 = 1 + (uint16_t)(rnd_get(X, 4, P->P1 - 1));
-  ret.b1 = (uint16_t)(rnd_get(X, 5, P->P1));
+  ret.a1 = 1 + rnd_get(X, 4, P->P1 - 1);
+  ret.b1 = rnd_get(X, 5, P->P1);
 
   return ret;
 }

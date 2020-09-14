@@ -2,6 +2,8 @@
 
 schedule *sched_new(int rows, int cols, int estimated_ops) {
   schedule *S = calloc(1, sizeof(schedule));
+  S->rows = rows;
+  S->cols = cols;
   S->c = calloc(cols, sizeof(int));
   S->ci = calloc(cols, sizeof(int));
   S->d = calloc(rows, sizeof(int));
@@ -44,4 +46,13 @@ void sched_free(schedule *S) {
 void sched_push(schedule *S, int i, int j, int beta) {
   sched_op op = {.i = i, .j = j, .beta = beta};
   kv_push(sched_op, S->ops, op);
+}
+
+void sched_rebuild_permutations(schedule *S) {
+  for (int i = 0; i < S->rows; i++) {
+    S->di[S->d[i]] = i;
+  }
+  for (int j = 0; j < S->cols; j++) {
+    S->c[S->ci[j]] = j;
+  }
 }

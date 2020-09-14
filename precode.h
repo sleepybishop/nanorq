@@ -8,7 +8,7 @@
 #include "wrkmat.h"
 
 spmat *precode_matrix_gen(params *P, int overhead);
-bool precode_matrix_intermediate(params *P, spmat *A, octmat *D);
 schedule *precode_matrix_invert(params *P, spmat *A);
+void precode_matrix_intermediate(params *P, octmat *D, schedule *S);
 
 #endif

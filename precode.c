@@ -425,19 +425,8 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
   return S;
 }
 
-bool precode_matrix_intermediate(params *P, spmat *A, octmat *D) {
-  int rows = A->rows, cols = A->cols;
-  if (rows <= 0)
-    return false;
-
-  schedule *S = precode_matrix_invert(P, A);
-  if (S == NULL)
-    return false;
-
+void precode_matrix_intermediate(params *P, octmat *D, schedule *S) {
   precode_matrix_apply_sched(D, S);
-  precode_matrix_permute(D, S->di, rows);
-  precode_matrix_permute(D, S->c, cols);
-
-  sched_free(S);
-  return true;
+  precode_matrix_permute(D, S->di, S->rows);
+  precode_matrix_permute(D, S->c, S->cols);
 }

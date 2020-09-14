@@ -71,14 +71,16 @@ void dump_block(nanorq *rq, struct ioctx *myio, int sbn, symvec *packets,
 }
 
 void usage(char *prog) {
-  fprintf(stderr, "usage:\n%s <packet_size> <num_packets> <overhead_pct>\n",
+  fprintf(stderr,
+          "usage:\n%s <packet_size> <num_packets> <overhead_pct> "
+          "[<precalculate: (0,10)]\n",
           prog);
   exit(1);
 }
 
 double encode(uint64_t len, size_t packet_size, size_t num_packets,
               float overhead_pct, struct ioctx *myio, symvec *packets,
-              uint64_t *oti_common, uint32_t *oti_scheme) {
+              uint64_t *oti_common, uint32_t *oti_scheme, bool precalc) {
   nanorq *rq = nanorq_encoder_new_ex(len, packet_size, num_packets, 0, 8);
 
   if (rq == NULL) {
@@ -89,6 +91,8 @@ double encode(uint64_t len, size_t packet_size, size_t num_packets,
   *oti_common = nanorq_oti_common(rq);
   *oti_scheme = nanorq_oti_scheme_specific(rq);
 
+  if (precalc)
+    nanorq_precalculate(rq);
   int num_sbn = nanorq_blocks(rq);
   double elapsed = 0.0;
   uint64_t t0 = usecs();
@@ -136,7 +140,8 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
   return elapsed;
 }
 
-int run(size_t num_packets, size_t packet_size, float overhead_pct) {
+int run(size_t num_packets, size_t packet_size, float overhead_pct,
+        bool precalc) {
   double elapsed;
   uint64_t objsize = 160 * 1024 * 1024;
   int num_sbn = objsize / (num_packets * packet_size);
@@ -164,7 +169,7 @@ int run(size_t num_packets, size_t packet_size, float overhead_pct) {
 
   // encode
   elapsed = encode(sz, packet_size, num_packets, overhead_pct, myio, &packets,
-                   &oti_common, &oti_scheme);
+                   &oti_common, &oti_scheme, precalc);
 
   if (elapsed < 0)
     abort();
@@ -229,8 +234,9 @@ int main(int argc, char *argv[]) {
   size_t packet_size = strtol(argv[1], NULL, 10); // T
   size_t num_packets = strtol(argv[2], NULL, 10); // K
   float overhead_pct = strtof(argv[3], NULL);     // overhead pct
+  bool precalc = ((argc > 4) && (strtod(argv[4], NULL) > 0)) ? true : false;
 
-  run(num_packets, packet_size, overhead_pct);
+  run(num_packets, packet_size, overhead_pct, precalc);
 
   return 0;
 }

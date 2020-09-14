@@ -66,6 +66,11 @@ size_t bitmask_gaps(bitmask *bm, size_t until) {
   return gaps;
 }
 
+void bitmask_reset(bitmask *bm) {
+  for (size_t idx = 0; idx < kv_size(*bm); idx++)
+    kv_A(*bm, idx) = 0;
+}
+
 void bitmask_free(bitmask *bm) {
   if (bm)
     kv_destroy(*bm);

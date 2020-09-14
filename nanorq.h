@@ -46,12 +46,18 @@ uint32_t nanorq_tag(uint8_t sbn, uint32_t esi);
 // return the max number of repair symbols allowed
 size_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn);
 
+// precalculate precode matrix inversion
+bool nanorq_precalculate(nanorq *rq);
+
 // return the number of bytes written for a given sbn and esi encode request
 uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
                        struct ioctx *io);
 
 // cleanup encoder resources of a given block
 void nanorq_encoder_cleanup(nanorq *rq, uint8_t sbn);
+
+// reset internal state
+void nanorq_encoder_reset(nanorq *rq, uint8_t sbn);
 
 // returns a new decoder initialized with given parameters
 nanorq *nanorq_decoder_new(uint64_t common, uint32_t specific);
