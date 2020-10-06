@@ -210,8 +210,8 @@ static bool precode_matrix_precond(params *P, spmat *A, spmat *AT,
 
   spmat *NZT = spmat_new(3, rows);
   for (int row = 0; row < Srows; row++) {
-    if (S->nz[row] < 3)
-      spmat_push(NZT, S->nz[row], row);
+    if (S->nz[S->d[row]] < 3)
+      spmat_push(NZT, S->nz[S->d[row]], S->d[row]);
   }
   while (i + u < P->L) {
     int Vrows = rows - i, Vcols = cols - i - u, V0 = i;
@@ -395,7 +395,7 @@ static void *precode_matrix_cleanup(spmat *A, spmat *AT, schedule *S,
 
 schedule *precode_matrix_invert(params *P, spmat *A) {
   int rows = A->rows, cols = A->cols;
-  schedule *S = sched_new(rows, cols, P->L);
+  schedule *S = sched_new(rows, cols, 3 * P->L);
   wrkmat *U = NULL;
 
   precode_matrix_sort(P, A, S);

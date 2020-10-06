@@ -132,6 +132,7 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
     uint64_t t0 = usecs();
     if (!nanorq_repair_block(rq, myio, sbn)) {
       fprintf(stderr, "decode of sbn %d failed.\n", sbn);
+      abort();
     }
     elapsed += (usecs() - t0) / 1000000.0;
     nanorq_encoder_cleanup(rq, sbn);

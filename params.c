@@ -37,7 +37,7 @@ params params_init(uint16_t K) {
   P.P = P.L - P.W;
   P.U = P.P - P.H;
   P.B = P.W - P.S;
-  P.P1 = P.P + 1;
+  P.P1 = P.P;
 
   while (!is_prime(P.P1))
     P.P1++;
