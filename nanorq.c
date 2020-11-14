@@ -206,9 +206,7 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   if (S == NULL)
     return false;
   precode_matrix_intermediate(&rq->P, &enc->D, S);
-  if (rq->S)
-    sched_rebuild_permutations(S);
-  else
+  if (rq->S == NULL)
     sched_free(S);
   enc->inverted = true;
   return true;

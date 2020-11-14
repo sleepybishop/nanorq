@@ -47,12 +47,3 @@ void sched_push(schedule *S, int i, int j, int beta) {
   sched_op op = {.i = i, .j = j, .beta = beta};
   kv_push(sched_op, S->ops, op);
 }
-
-void sched_rebuild_permutations(schedule *S) {
-  for (int i = 0; i < S->rows; i++) {
-    S->di[S->d[i]] = i;
-  }
-  for (int j = 0; j < S->cols; j++) {
-    S->c[S->ci[j]] = j;
-  }
-}

@@ -432,6 +432,12 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
 
 void precode_matrix_intermediate(params *P, octmat *D, schedule *S) {
   precode_matrix_apply_sched(D, S);
-  precode_matrix_permute(D, S->di, S->rows);
-  precode_matrix_permute(D, S->c, S->cols);
+  int *rm = calloc(sizeof(int), S->rows);
+  int *cm = calloc(sizeof(int), S->cols);
+  memcpy(rm, S->di, sizeof(int) * S->rows);
+  memcpy(cm, S->c, sizeof(int) * S->cols);
+  precode_matrix_permute(D, rm, S->rows);
+  precode_matrix_permute(D, cm, S->cols);
+  free(rm);
+  free(cm);
 }

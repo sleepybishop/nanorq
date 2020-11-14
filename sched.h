@@ -30,6 +30,5 @@ typedef struct {
 schedule *sched_new(int rows, int cols, int estimated_ops);
 void sched_free(schedule *S);
 void sched_push(schedule *S, int i, int j, int beta);
-void sched_rebuild_permutations(schedule *S);
 
 #endif
