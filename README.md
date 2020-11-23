@@ -1,6 +1,8 @@
 # nanorq
-this is a c99 port of raptorq codes aka rfc6330 with a focus on performace and code size.
+nanorq is a compact, performant implementation of the raptorq fountain code capable of reaching multi-gigabit speeds on a single core.
 
-it was originally inspired by libraptorq and velopyraptorq but diverged significantly in it's approach and api.
+nanorq provides flexible I/O handling, wrappers are provided for memory buffers, mmap (zero copy) and streams. Additional abstractions can be implemented without interacting with the decoder logic.
 
-afaik its the fastest public implementation however performance could still be much improved by reusing the precomputed schedule wherever possible
+
+
+
