@@ -36,6 +36,9 @@ bench: benchmark
 	./benchmark 1280 50000 5.0
 #	./benchmark 1280 56403 5.0
 
+graph.png: graph.dat graph.gnuplot
+	gnuplot graph.gnuplot
+
 oblas/liboblas.a:
 	$(MAKE) -C oblas
 
