@@ -12,14 +12,23 @@ static void precode_matrix_permute(octmat *D, int P[], int n) {
   }
 }
 
+static void precode_matrix_apply_op(octmat *D, schedule *S, int i) {
+  sched_op op = kv_A(S->ops, i);
+  if (op.beta)
+    oaxpy(om_P(*D), om_P(*D), op.i, op.j, D->cols, op.beta);
+  else
+    oscal(om_P(*D), op.i, D->cols, op.j);
+}
+
 static void precode_matrix_apply_sched(octmat *D, schedule *S) {
-  for (int i = 0; i < kv_size(S->ops); i++) {
-    sched_op op = kv_A(S->ops, i);
-    if (op.beta)
-      oaxpy(om_P(*D), om_P(*D), op.i, op.j, D->cols, op.beta);
-    else
-      oscal(om_P(*D), op.i, D->cols, op.j);
-  }
+  for (int i = 0; i < S->marks[1]; i++)
+    precode_matrix_apply_op(D, S, i);
+  for (int i = S->marks[0]; i >= 0; i--)
+    precode_matrix_apply_op(D, S, i);
+  for (int i = S->marks[1]; i < kv_size(S->ops); i++)
+    precode_matrix_apply_op(D, S, i);
+  for (int i = 0; i <= S->marks[0]; i++)
+    precode_matrix_apply_op(D, S, i);
 }
 
 static void precode_matrix_make_identity(spmat *A, int dim, int m, int n) {
@@ -235,21 +244,6 @@ static bool precode_matrix_precond(params *P, spmat *A, spmat *AT,
   return true;
 }
 
-static void precode_matrix_unwind_X(params *P, wrkmat *U, schedule *S) {
-  for (int i = S->Xe; i >= S->Xs; i--) {
-    sched_op op = kv_A(S->ops, i);
-    wrkmat_axpy(U, op.i, op.j, op.beta);
-    sched_push(S, op.i, op.j, op.beta);
-  }
-}
-
-static void precode_matrix_rewind_X(params *P, wrkmat *U, schedule *S) {
-  for (int i = S->Xs; i <= S->Xe; i++) {
-    sched_op op = kv_A(S->ops, i);
-    sched_push(S, op.i, op.j, op.beta);
-  }
-}
-
 static void precode_matrix_fwd_GE(wrkmat *U, schedule *S, spmat *AT, int s,
                                   int e) {
   int *c = S->c, *d = S->d, *di = S->di;
@@ -304,8 +298,7 @@ static wrkmat *precode_matrix_make_U(params *P, spmat *A, spmat *AT,
   wrkmat *U = wrkmat_new(A->rows, S->u);
   precode_matrix_fill_U(U, A, AT, S);
   precode_matrix_fwd_GE(U, S, AT, 0, S->i);
-  S->Xs = 0;
-  S->Xe = kv_size(S->ops) - 1;
+  S->marks[0] = kv_size(S->ops) - 1;
   precode_matrix_fwd_GE(U, S, AT, S->i - 1, A->rows - P->H);
   return U;
 }
@@ -420,11 +413,8 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
       return false;
     }
   }
-
-  precode_matrix_unwind_X(P, U, S);
+  S->marks[1] = kv_size(S->ops) - 1;
   precode_matrix_backsolve(P, AT, U, S);
-  precode_matrix_rewind_X(P, U, S);
-
   precode_matrix_cleanup(A, AT, NULL, U);
 
   return S;

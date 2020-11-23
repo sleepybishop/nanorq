@@ -23,8 +23,7 @@ typedef struct {
   int i;      /* dim of X submatrix */
   int u;      /* remaining cols */
 
-  int Xs; /* start of operations on X */
-  int Xe; /* end of operations on X */
+  int marks[2]; /* checkpoints */
 } schedule;
 
 schedule *sched_new(int rows, int cols, int estimated_ops);
