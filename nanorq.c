@@ -442,7 +442,8 @@ void nanorq_encoder_reset(nanorq *rq, uint8_t sbn) {
   if (kv_size(enc->repair_bin) > 0) {
     for (int rs = 0; rs < kv_size(enc->repair_bin); rs++)
       om_destroy(&(kv_A(enc->repair_bin, rs).row));
-    kv_size(enc->repair_bin) = 0;
+    kv_destroy(enc->repair_bin);
+    kv_init(enc->repair_bin);
   }
   if (kv_size(enc->repair_mask) > 0)
     bitmask_reset(&enc->repair_mask);

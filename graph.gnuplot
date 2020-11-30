@@ -6,7 +6,7 @@ set style histogram cluster gap 1
 
 set style fill solid border rgb "#ffffff"
 set auto x
-set title "Throughput (packet size=1280) Intel Core i5-8400 @ 2.8GHz"
+set title argtitle
 set xlabel "K"
 set ylabel "Mb/s"
 set yrange [0:*]

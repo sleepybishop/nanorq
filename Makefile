@@ -25,19 +25,20 @@ decode: decode.o libnanorq.a
 
 benchmark: benchmark.o libnanorq.a
 
-bench: benchmark
-	./benchmark 1280    50 5.0
-	./benchmark 1280   100 5.0
-	./benchmark 1280   500 5.0
-	./benchmark 1280  1000 5.0
-	./benchmark 1280  2500 5.0
-	./benchmark 1280  5000 5.0	
-	./benchmark 1280 10000 5.0
-	./benchmark 1280 50000 5.0
-#	./benchmark 1280 56403 5.0
+bench: graph.dat
+	cat graph.dat
+
+graph.dat: benchmark
+	echo "K       encode   precalc  decode  decode-oh5" > graph.dat
+	./benchmark 1280   100 5.0 >> graph.dat 
+	./benchmark 1280   500 5.0 >> graph.dat
+	./benchmark 1280  1000 5.0 >> graph.dat
+	./benchmark 1280  5000 5.0 >> graph.dat	
+	./benchmark 1280 10000 5.0 >> graph.dat
+	./benchmark 1280 50000 5.0 >> graph.dat
 
 graph.png: graph.dat graph.gnuplot
-	gnuplot graph.gnuplot
+	gnuplot -e "argtitle='Throughput (packet size=1280) `lscpu|grep -i 'model name'|cut -f2 -d:|xargs`'" graph.gnuplot 
 
 oblas/liboblas.a:
 	$(MAKE) -C oblas
