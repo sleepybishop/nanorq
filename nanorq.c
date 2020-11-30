@@ -126,12 +126,13 @@ static struct block_encoder *get_block_encoder(nanorq *rq, uint8_t sbn,
   struct block_encoder *enc = calloc(1, sizeof(struct block_encoder));
   enc->K = nanorq_block_symbols(rq, sbn);
 
-  int matrows = rq->P.L;
+  int spare = 0;
   if (overhead > 0) {
     enc->repair_mask = bitmask_new(enc->K);
-    matrows += (matrows / 5); // estimate 20 pct overhead
+    spare = div_ceil(rq->P.L, 20);   // estimate 5 pct overhead
+    spare = (spare > 5) ? spare : 5; // but at least K + 5
   }
-  om_resize(&enc->D, matrows, rq->common.T);
+  om_resize(&enc->D, rq->P.L + spare, rq->common.T);
 
   rq->encoders[sbn] = enc;
   return enc;
@@ -436,7 +437,8 @@ void nanorq_encoder_reset(nanorq *rq, uint8_t sbn) {
   struct block_encoder *enc = rq->encoders[sbn];
   enc->loaded = false;
   enc->inverted = false;
-  memset(&enc->D.data, 0, enc->D.rows * enc->D.cols_al);
+  if (&enc->D.data)
+    memset(om_P(enc->D), 0, enc->D.rows * enc->D.cols_al);
   if (kv_size(enc->repair_bin) > 0) {
     for (int rs = 0; rs < kv_size(enc->repair_bin); rs++)
       om_destroy(&(kv_A(enc->repair_bin, rs).row));
