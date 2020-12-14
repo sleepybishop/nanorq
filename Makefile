@@ -28,6 +28,9 @@ benchmark: benchmark.o libnanorq.a
 bench: graph.dat
 	cat graph.dat
 
+bench.md: graph.dat
+	cat graph.dat | awk -f graph.awk 
+
 graph.dat: benchmark
 	echo "K       encode   precalc  decode  decode-oh5" > graph.dat
 	./benchmark 1280   100 5.0 >> graph.dat 
