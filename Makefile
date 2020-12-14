@@ -48,7 +48,7 @@ oblas_clean:
 	$(MAKE) -C oblas clean
 
 libnanorq.a: $(OBJ) oblas/liboblas.a
-	$(AR) rcs $@ $^ oblas/*.o
+	$(AR) rcs $@ $(OBJ) oblas/*.o
 
 clean: oblas_clean
 	$(RM) encode decode *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old
@@ -57,7 +57,7 @@ indent:
 	clang-format -style=LLVM -i *.c *.h
 
 scan:
-	scan-build $(MAKE) clean all
+	scan-build $(MAKE) clean benchmark
 
 profile:
 	$(RM) callgrind.*
