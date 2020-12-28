@@ -44,7 +44,7 @@ graph.png: graph.dat graph.gnuplot
 	gnuplot -e "argtitle='Throughput (packet size=1280) `lscpu|grep -i 'model name'|cut -f2 -d:|xargs`'" graph.gnuplot 
 
 oblas/liboblas.a:
-	$(MAKE) -C oblas
+	$(MAKE) -C oblas CPPFLAGS+="-DOBLAS_AVX -DOCTMAT_ALIGN=32"
 
 .PHONY: oblas_clean
 oblas_clean:

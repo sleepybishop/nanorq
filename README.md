@@ -11,4 +11,5 @@ nanorq provides flexible I/O handling, wrappers are provided for memory buffers,
 - video streaming
 - large data transfers across high latency links
 
-
+## Notes
+  Default build is configured for AVX, adjust Makefile as needed for other archs
