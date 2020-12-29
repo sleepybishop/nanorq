@@ -437,7 +437,7 @@ void nanorq_encoder_reset(nanorq *rq, uint8_t sbn) {
   struct block_encoder *enc = rq->encoders[sbn];
   enc->loaded = false;
   enc->inverted = false;
-  if (&enc->D.data)
+  if (om_P(enc->D))
     memset(om_P(enc->D), 0, enc->D.rows * enc->D.cols_al);
   if (kv_size(enc->repair_bin) > 0) {
     for (int rs = 0; rs < kv_size(enc->repair_bin); rs++)
