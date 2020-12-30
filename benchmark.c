@@ -27,7 +27,7 @@ uint64_t usecs() {
 
 void random_bytes(uint8_t *buf, uint64_t len) {
   for (int i = 0; i < len; i++) {
-    buf[i] = rand();
+    buf[i] = (uint8_t)rand();
   }
 }
 

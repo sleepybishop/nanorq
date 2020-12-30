@@ -17,7 +17,7 @@ void bitmask_set(bitmask *bm, size_t id) {
   while (idx >= kv_size(*bm))
     kv_push(uint32_t, *bm, 0);
 
-  uint32_t add_mask = 1 << (id % IDXBITS);
+  uint32_t add_mask = 1U << (id % IDXBITS);
   kv_A(*bm, idx) |= add_mask;
 }
 
@@ -26,7 +26,7 @@ void bitmask_clear(bitmask *bm, size_t id) {
   while (idx >= kv_size(*bm))
     kv_push(uint32_t, *bm, 0);
 
-  uint32_t clear_mask = 1 << (id % IDXBITS);
+  uint32_t clear_mask = 1U << (id % IDXBITS);
 
   kv_A(*bm, idx) &= ~clear_mask;
 }
@@ -36,7 +36,7 @@ bool bitmask_check(bitmask *bm, size_t id) {
   if (idx >= kv_size(*bm))
     return false;
 
-  uint32_t check_mask = 1 << (id % IDXBITS);
+  uint32_t check_mask = 1U << (id % IDXBITS);
   return (kv_A(*bm, idx) & check_mask) != 0;
 }
 
