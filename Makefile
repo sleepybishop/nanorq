@@ -91,3 +91,9 @@ perf:
 	perf script | gprof2dot --format=perf | dot -T svg > perf.svg
 	#perf report
 
+ubsan: CC=clang
+ubsan: CFLAGS += -fsanitize=undefined,implicit-conversion,integer
+ubsan: LDFLAGS += -lubsan
+ubsan: clean benchmark
+	./benchmark 1280 50000 0
+
