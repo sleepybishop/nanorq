@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  uint8_t num_sbn = nanorq_blocks(rq);
+  int num_sbn = nanorq_blocks(rq);
   uint32_t tag;
   size_t packet_size = nanorq_symbol_size(rq);
   uint8_t packet[packet_size];

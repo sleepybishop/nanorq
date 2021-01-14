@@ -79,8 +79,8 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  uint8_t num_sbn = nanorq_blocks(rq);
-  for (uint8_t b = 0; b < num_sbn; b++) {
+  int num_sbn = nanorq_blocks(rq);
+  for (int b = 0; b < num_sbn; b++) {
     nanorq_generate_symbols(rq, b, myio);
   }
 
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
   FILE *oh = fopen("data.rq", "w+");
   fwrite(&oti_common, 1, sizeof(oti_common), oh);
   fwrite(&oti_scheme, 1, sizeof(oti_scheme), oh);
-  for (uint8_t sbn = 0; sbn < num_sbn; sbn++) {
+  for (int sbn = 0; sbn < num_sbn; sbn++) {
     dump_block(rq, myio, oh, sbn);
   }
   fclose(oh);
