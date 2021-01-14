@@ -43,8 +43,11 @@ size_t nanorq_block_symbols(nanorq *rq, uint8_t sbn);
 // returns a compound symbol identifier comprised of sbn and esi
 uint32_t nanorq_tag(uint8_t sbn, uint32_t esi);
 
+// return the max number of blocks allowed
+size_t nanorq_max_blocks(nanorq *rq);
+
 // return the max number of repair symbols allowed
-size_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn);
+size_t nanorq_max_repair(nanorq *rq, uint8_t sbn);
 
 // precalculate precode matrix inversion
 bool nanorq_precalculate(nanorq *rq);

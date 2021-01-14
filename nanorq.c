@@ -365,7 +365,9 @@ size_t nanorq_block_symbols(nanorq *rq, uint8_t sbn) {
   return 0;
 }
 
-size_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn) {
+size_t nanorq_max_blocks(nanorq *rq) { return Z_max; }
+
+size_t nanorq_max_repair(nanorq *rq, uint8_t sbn) {
   return (uint32_t)((1 << 20) - nanorq_block_symbols(rq, sbn));
 }
 
