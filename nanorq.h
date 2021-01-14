@@ -12,8 +12,8 @@ static const uint64_t NANORQ_MAX_TRANSFER = 946270874880ULL; // ~881 GB
 typedef struct nanorq nanorq;
 
 // returns a new encoder configured with given parameters
-nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint8_t Al);
-nanorq *nanorq_encoder_new_ex(uint64_t len, uint16_t T, uint16_t K, uint16_t Z,
+nanorq *nanorq_encoder_new(size_t len, uint16_t T, uint8_t Al);
+nanorq *nanorq_encoder_new_ex(size_t len, uint16_t T, uint16_t K, uint16_t Z,
                               uint8_t Al);
 
 // returns success of generating symbols for a given sbn
@@ -29,7 +29,7 @@ uint64_t nanorq_oti_common(nanorq *rq);
 uint32_t nanorq_oti_scheme_specific(nanorq *rq);
 
 // returns the total size of the payload to be transferred
-uint64_t nanorq_transfer_length(nanorq *rq);
+size_t nanorq_transfer_length(nanorq *rq);
 
 // returns the symbol size in bytes (T)
 size_t nanorq_symbol_size(nanorq *rq);
@@ -50,8 +50,8 @@ size_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn);
 bool nanorq_precalculate(nanorq *rq);
 
 // return the number of bytes written for a given sbn and esi encode request
-uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
-                       struct ioctx *io);
+size_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
+                     struct ioctx *io);
 
 // cleanup encoder resources of a given block
 void nanorq_encoder_cleanup(nanorq *rq, uint8_t sbn);

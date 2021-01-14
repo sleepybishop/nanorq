@@ -138,10 +138,10 @@ static struct block_encoder *get_block_encoder(nanorq *rq, uint8_t sbn,
   return enc;
 }
 
-static uint64_t transfer_esi(nanorq *rq, uint8_t sbn, uint32_t esi, uint16_t K,
-                             uint8_t *ptr, size_t len, struct ioctx *io,
-                             int out) {
-  uint64_t transfer = 0;
+static size_t transfer_esi(nanorq *rq, uint8_t sbn, uint32_t esi, uint16_t K,
+                           uint8_t *ptr, size_t len, struct ioctx *io,
+                           int out) {
+  size_t transfer = 0;
   int col = 0, symbol_size = rq->common.T / rq->common.Al;
   struct source_block blk = get_source_block(rq, sbn, symbol_size);
   for (int i = 0; i < symbol_size;) {
@@ -220,7 +220,7 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
  * Z: number of source blocks     (set K to zero);
  * Al: symbol alignment size
  */
-nanorq *nanorq_encoder_new_ex(uint64_t len, uint16_t T, uint16_t K, uint16_t Z,
+nanorq *nanorq_encoder_new_ex(size_t len, uint16_t T, uint16_t K, uint16_t Z,
                               uint8_t Al) {
   nanorq *rq = NULL;
 
@@ -273,7 +273,7 @@ nanorq *nanorq_encoder_new_ex(uint64_t len, uint16_t T, uint16_t K, uint16_t Z,
   return rq;
 }
 
-nanorq *nanorq_encoder_new(uint64_t len, uint16_t T, uint8_t Al) {
+nanorq *nanorq_encoder_new(size_t len, uint16_t T, uint8_t Al) {
   return nanorq_encoder_new_ex(len, T, 0, 0, Al);
 }
 
@@ -311,7 +311,7 @@ uint32_t nanorq_tag(uint8_t sbn, uint32_t esi) {
   return ret;
 }
 
-uint64_t nanorq_transfer_length(nanorq *rq) { return rq->common.F; }
+size_t nanorq_transfer_length(nanorq *rq) { return rq->common.F; }
 
 size_t nanorq_symbol_size(nanorq *rq) { return rq->common.T; }
 
@@ -370,7 +370,7 @@ size_t nanorq_encoder_max_repair(nanorq *rq, uint8_t sbn) {
 }
 
 size_t nanorq_blocks(nanorq *rq) {
-  return (int)(rq->src_part.JL + rq->src_part.JS);
+  return (size_t)(rq->src_part.JL + rq->src_part.JS);
 }
 
 bool nanorq_precalculate(nanorq *rq) {
@@ -383,9 +383,9 @@ bool nanorq_precalculate(nanorq *rq) {
   return true;
 }
 
-uint64_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
-                       struct ioctx *io) {
-  uint64_t written = 0;
+size_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
+                     struct ioctx *io) {
+  size_t written = 0;
   struct block_encoder *enc = get_block_encoder(rq, sbn, 0);
   if (enc == NULL)
     return 0;
