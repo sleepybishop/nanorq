@@ -19,6 +19,6 @@ typedef struct {
 } params;
 
 params params_init(uint16_t symbols);
-int_vec params_get_idxs(uint32_t X, params *P);
+uint_vec params_get_idxs(uint32_t X, params *P);
 
 #endif

@@ -1,6 +1,6 @@
 #include "sched.h"
 
-schedule *sched_new(int rows, int cols, int estimated_ops) {
+schedule *sched_new(unsigned rows, unsigned cols, unsigned estimated_ops) {
   schedule *S = calloc(1, sizeof(schedule));
   S->rows = rows;
   S->cols = cols;
@@ -8,7 +8,7 @@ schedule *sched_new(int rows, int cols, int estimated_ops) {
   S->ci = calloc(cols, sizeof(int));
   S->d = calloc(rows, sizeof(int));
   S->di = calloc(rows, sizeof(int));
-  S->nz = calloc(rows, sizeof(int));
+  S->nz = calloc(rows, sizeof(unsigned));
   // init permutation vectors
   for (int j = 0; j < cols; j++) {
     S->c[j] = j;
@@ -43,7 +43,7 @@ void sched_free(schedule *S) {
   free(S);
 }
 
-void sched_push(schedule *S, int i, int j, int beta) {
+void sched_push(schedule *S, unsigned i, unsigned j, uint8_t beta) {
   sched_op op = {.i = i, .j = j, .beta = beta};
   kv_push(sched_op, S->ops, op);
 }

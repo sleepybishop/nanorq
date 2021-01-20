@@ -7,17 +7,17 @@
 #include "util.h"
 
 typedef struct {
-  size_t rows;
-  size_t cols;
-  int_vec *idxs;
+  unsigned rows;
+  unsigned cols;
+  uint_vec *idxs;
 } spmat;
 
-spmat *spmat_new(int rows, int cols);
+spmat *spmat_new(unsigned rows, unsigned cols);
 void spmat_free(spmat *s);
 
-void spmat_clear_row(spmat *s, int i);
-void spmat_push(spmat *s, int i, int j);
+void spmat_clear_row(spmat *s, unsigned i);
+void spmat_push(spmat *s, unsigned i, unsigned j);
 spmat *spmat_transpose(spmat *s);
-int spmat_nnz(spmat *s, int row, int start, int end);
+unsigned spmat_nnz(spmat *s, unsigned row, unsigned start, unsigned end);
 
 #endif

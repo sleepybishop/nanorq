@@ -12,22 +12,22 @@ typedef struct {
 typedef kvec_t(sched_op) oplist;
 
 typedef struct {
-  int rows;
-  int cols;
+  unsigned rows;
+  unsigned cols;
   int *c;  /* column permutation */
   int *d;  /* row permutation */
   int *ci; /* inverse map of c */
   int *di; /* inverse map of d */
-  int *nz;
+  unsigned *nz;
   oplist ops; /* list of decoding operations */
-  int i;      /* dim of X submatrix */
-  int u;      /* remaining cols */
+  unsigned i; /* dim of X submatrix */
+  unsigned u; /* remaining cols */
 
-  int marks[2]; /* checkpoints */
+  unsigned marks[2]; /* checkpoints */
 } schedule;
 
-schedule *sched_new(int rows, int cols, int estimated_ops);
+schedule *sched_new(unsigned rows, unsigned cols, unsigned estimated_ops);
 void sched_free(schedule *S);
-void sched_push(schedule *S, int i, int j, int beta);
+void sched_push(schedule *S, unsigned i, unsigned j, uint8_t beta);
 
 #endif

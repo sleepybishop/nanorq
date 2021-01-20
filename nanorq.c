@@ -174,7 +174,7 @@ static bool load_symbol_matrix(nanorq *rq, uint8_t sbn, struct ioctx *io) {
 }
 
 void decode_row(params *P, octmat *D, uint32_t row, uint8_t *ptr, size_t len) {
-  int_vec idxs = params_get_idxs(row, P);
+  uint_vec idxs = params_get_idxs(row, P);
   memset(ptr, 0, len);
   for (int idx = 0; idx < kv_size(idxs); idx++) {
     const uint8_t *tmp = om_R(*D, kv_A(idxs, idx));
@@ -515,7 +515,7 @@ static void patch_precode_matrix(params *P, spmat *A, uint16_t K, int num_gaps,
     int row = gap + P->H + P->S;
     spmat_clear_row(A, row);
 
-    int_vec idxs =
+    uint_vec idxs =
         params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
     for (int idx = 0; idx < kv_size(idxs); idx++) {
       spmat_push(A, row, kv_A(idxs, idx));
@@ -526,7 +526,7 @@ static void patch_precode_matrix(params *P, spmat *A, uint16_t K, int num_gaps,
 
   for (int rep_row = P->L; rep_row < A->rows; rep_row++) {
     spmat_clear_row(A, rep_row);
-    int_vec idxs =
+    uint_vec idxs =
         params_get_idxs(kv_A(*repair_bin, rep_idx++).esi + padding, P);
     for (int idx = 0; idx < kv_size(idxs); idx++) {
       spmat_push(A, rep_row, kv_A(idxs, idx));

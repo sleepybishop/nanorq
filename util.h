@@ -25,6 +25,6 @@ typedef struct {
 } repair_sym;
 
 typedef kvec_t(repair_sym) repair_vec;
-typedef kvec_t(int) int_vec;
+typedef kvec_t(unsigned) uint_vec;
 
 #endif

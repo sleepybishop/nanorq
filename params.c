@@ -22,7 +22,7 @@ static bool is_prime(uint16_t n) {
 params params_init(uint16_t K) {
   params P;
 
-  for (int i = 0; i < K_padded_size; i++) {
+  for (unsigned i = 0; i < K_padded_size; i++) {
     if (K <= K_padded[i]) {
       P.Kprime = K_padded[i];
       P.J = J_K_padded[i];
@@ -45,27 +45,27 @@ params params_init(uint16_t K) {
   return P;
 }
 
-int_vec params_get_idxs(uint32_t X, params *P) {
-  int_vec ret;
+uint_vec params_get_idxs(uint32_t X, params *P) {
+  uint_vec ret;
   tuple t = gen_tuple(X, P);
 
   kv_init(ret);
-  kv_resize(int, ret, t.d + t.d1);
-  kv_push(int, ret, t.b);
+  kv_resize(unsigned, ret, t.d + t.d1);
+  kv_push(unsigned, ret, t.b);
 
-  for (int j = 1; j < t.d; j++) {
+  for (unsigned j = 1; j < t.d; j++) {
     t.b = (t.b + t.a) % P->W;
-    kv_push(int, ret, t.b);
+    kv_push(unsigned, ret, t.b);
   }
   while (t.b1 >= P->P)
     t.b1 = (t.b1 + t.a1) % P->P1;
 
-  kv_push(int, ret, P->W + t.b1);
-  for (int j = 1; j < t.d1; j++) {
+  kv_push(unsigned, ret, P->W + t.b1);
+  for (unsigned j = 1; j < t.d1; j++) {
     t.b1 = (t.b1 + t.a1) % P->P1;
     while (t.b1 >= P->P)
       t.b1 = (t.b1 + t.a1) % P->P1;
-    kv_push(int, ret, P->W + t.b1);
+    kv_push(unsigned, ret, P->W + t.b1);
   }
   return ret;
 }

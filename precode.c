@@ -82,7 +82,7 @@ static octmat precode_matrix_make_HDPC(params *P) {
 static void precode_matrix_make_G_ENC(spmat *A, params *P) {
   for (int row = P->S + P->H; row < P->L; row++) {
     uint32_t isi = (row - P->S) - P->H;
-    int_vec idxs = params_get_idxs(isi, P);
+    uint_vec idxs = params_get_idxs(isi, P);
     for (int idx = 0; idx < kv_size(idxs); idx++)
       spmat_push(A, row, kv_A(idxs, idx));
     kv_destroy(idxs);
@@ -114,7 +114,7 @@ static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
                                  schedule *S, spmat *NZT) {
   int chosen = Vrows, r = Vcols + 1;
   for (int b = 1; b < 3; b++) {
-    int_vec ns = NZT->idxs[b];
+    uint_vec ns = NZT->idxs[b];
     while (kv_size(ns) > 0) {
       chosen = kv_pop(ns);
       if (S->di[chosen] >= V0 && S->nz[chosen] == b)
@@ -135,7 +135,7 @@ static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
 
 static int precode_row_nz_fwd(spmat *A, int row, int s, int e, schedule *S) {
   int min = e;
-  int_vec rs = A->idxs[S->d[row]];
+  uint_vec rs = A->idxs[S->d[row]];
   for (int it = 0; it < kv_size(rs); it++) {
     int col = S->ci[kv_A(rs, it)];
     if (col >= s && col < e && col < min) {
@@ -149,7 +149,7 @@ static int precode_row_nz_rev(spmat *A, int row, int s, int e, schedule *S) {
   int tailsz = 10, tail[10]; // keep track of last N and find first zero col
   for (int t = 0; t < tailsz; t++)
     tail[t] = 0;
-  int_vec rs = A->idxs[S->d[row]];
+  uint_vec rs = A->idxs[S->d[row]];
   for (int it = 0; it < kv_size(rs); it++) {
     int col = S->ci[kv_A(rs, it)];
     if (col > (e - tailsz) && col < e) {
@@ -194,7 +194,7 @@ static void precode_matrix_swap_tail_cols(spmat *A, int row, int s, int e,
 
 static void precode_matrix_update_nnz(spmat *AT, int V0, int Vcols, int r,
                                       schedule *S, spmat *NZT) {
-  int_vec cs = AT->idxs[S->c[V0]];
+  uint_vec cs = AT->idxs[S->c[V0]];
   for (int it = 0; it < kv_size(cs); it++) {
     int row = kv_A(cs, it);
     int nz = --S->nz[row];
@@ -249,7 +249,7 @@ static void precode_matrix_fwd_GE(wrkmat *U, schedule *S, spmat *AT, int s,
   int *c = S->c, *d = S->d, *di = S->di;
   for (int row = 0; row < S->i; row++) {
     int mv = s < row ? row : s;
-    int_vec cs = AT->idxs[c[row]];
+    uint_vec cs = AT->idxs[c[row]];
     for (int it = 0; it < kv_size(cs); it++) {
       int tmp = kv_A(cs, it), h = di[tmp];
       if (h > mv && h < e) {
@@ -262,7 +262,7 @@ static void precode_matrix_fwd_GE(wrkmat *U, schedule *S, spmat *AT, int s,
 
 static void precode_matrix_fill_U(wrkmat *U, spmat *A, spmat *AT, schedule *S) {
   for (int i = 0; i < A->rows; i++) {
-    int_vec rs = A->idxs[i];
+    uint_vec rs = A->idxs[i];
     for (int it = 0; it < kv_size(rs); it++) {
       int col = S->ci[kv_A(rs, it)];
       if (col >= S->i)
@@ -360,7 +360,7 @@ static void precode_matrix_backsolve(params *P, spmat *AT, wrkmat *U,
                                      schedule *S) {
   int *c = S->c, *d = S->d;
   for (int row = P->L - 1; row >= S->i; row--) {
-    int_vec cs = AT->idxs[c[row]];
+    uint_vec cs = AT->idxs[c[row]];
     for (int it = 0; it < kv_size(cs); it++) {
       int del_row = S->di[kv_A(cs, it)];
       if (del_row < S->i)
