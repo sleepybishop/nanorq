@@ -7,7 +7,11 @@
 
 #include "io.h"
 
-static const uint64_t NANORQ_MAX_TRANSFER = 946270874880ULL; // ~881 GB
+#define NANORQ_SYM_DUP 2
+#define NANORQ_SYM_IGN 1
+#define NANORQ_SYM_ADDED 0
+#define NANORQ_SYM_ERR -1
+#define NANORQ_MAX_TRANSFER 946270874880ULL // ~881 GB
 
 typedef struct nanorq nanorq;
 
@@ -62,9 +66,12 @@ void nanorq_encoder_reset(nanorq *rq, uint8_t sbn);
 // returns a new decoder initialized with given parameters
 nanorq *nanorq_decoder_new(uint64_t common, uint32_t specific);
 
-// returns the success of adding a symbol to the decoder
-bool nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
-                               struct ioctx *io);
+// set the largest encoding symbol id allowed
+bool nanorq_set_max_esi(nanorq *rq, uint32_t max_esi);
+
+// returns the result of adding a symbol to the decoder, see NANORQ_SYM_*
+int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
+                              struct ioctx *io);
 
 // returns number of symbol gaps in decoder for given block
 size_t nanorq_num_missing(nanorq *rq, uint8_t sbn);

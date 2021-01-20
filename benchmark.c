@@ -132,7 +132,8 @@ double decode(uint64_t oti_common, uint32_t oti_scheme, struct ioctx *myio,
   while (bytes < TEST_BYTES) {
     for (int i = 0; i < kv_size(*packets); i++) {
       struct sym s = kv_A(*packets, i);
-      if (!nanorq_decoder_add_symbol(rq, (void *)s.data, s.tag, myio)) {
+      if (NANORQ_SYM_ERR ==
+          nanorq_decoder_add_symbol(rq, (void *)s.data, s.tag, myio)) {
         fprintf(stderr, "adding symbol %d to sbn %d failed.\n",
                 s.tag & 0x00ffffff, (s.tag >> 24) & 0xff);
         exit(1);

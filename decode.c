@@ -41,7 +41,8 @@ int main(int argc, char *argv[]) {
   uint8_t packet[packet_size];
   while (fread(&tag, 1, sizeof(tag), ih)) {
     fread(packet, packet_size, 1, ih);
-    if (!nanorq_decoder_add_symbol(rq, (void *)packet, tag, myio)) {
+    if (NANORQ_SYM_ERR ==
+        nanorq_decoder_add_symbol(rq, (void *)packet, tag, myio)) {
       fprintf(stdout, "adding symbol %d failed.\n", tag);
       abort();
     }
