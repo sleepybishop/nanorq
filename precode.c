@@ -80,13 +80,8 @@ static octmat precode_matrix_make_HDPC(params *P) {
 }
 
 static void precode_matrix_make_G_ENC(spmat *A, params *P) {
-  for (int row = P->S + P->H; row < P->L; row++) {
-    uint32_t isi = (row - P->S) - P->H;
-    uint_vec idxs = params_get_idxs(isi, P);
-    for (int idx = 0; idx < kv_size(idxs); idx++)
-      spmat_push(A, row, kv_A(idxs, idx));
-    kv_destroy(idxs);
-  }
+  for (int row = P->S + P->H; row < P->L; row++)
+    params_set_idxs(row - P->S - P->H, P, &A->idxs[row]);
 }
 
 spmat *precode_matrix_gen(params *P, int overhead) {

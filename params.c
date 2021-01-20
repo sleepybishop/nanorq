@@ -3,19 +3,18 @@
 #include "tuple.h"
 
 static bool is_prime(uint16_t n) {
+  if (n <= 1)
+    return false;
   if (n <= 3)
     return true;
+
   if (n % 2 == 0 || n % 3 == 0)
     return false;
 
-  uint32_t i = 5;
-  uint32_t w = 2;
-  while (i * i <= n) {
-    if (n % i == 0)
+  for (int i = 5; i * i <= n; i = i + 6)
+    if (n % i == 0 || n % (i + 2) == 0)
       return false;
-    i += w;
-    w = 6 - w;
-  }
+
   return true;
 }
 
@@ -45,27 +44,22 @@ params params_init(uint16_t K) {
   return P;
 }
 
-uint_vec params_get_idxs(uint32_t X, params *P) {
-  uint_vec ret;
+void params_set_idxs(uint32_t X, params *P, uint_vec *dst) {
   tuple t = gen_tuple(X, P);
 
-  kv_init(ret);
-  kv_resize(unsigned, ret, t.d + t.d1);
-  kv_push(unsigned, ret, t.b);
-
+  kv_push(unsigned, *dst, t.b);
   for (unsigned j = 1; j < t.d; j++) {
     t.b = (t.b + t.a) % P->W;
-    kv_push(unsigned, ret, t.b);
+    kv_push(unsigned, *dst, t.b);
   }
   while (t.b1 >= P->P)
     t.b1 = (t.b1 + t.a1) % P->P1;
 
-  kv_push(unsigned, ret, P->W + t.b1);
+  kv_push(unsigned, *dst, P->W + t.b1);
   for (unsigned j = 1; j < t.d1; j++) {
     t.b1 = (t.b1 + t.a1) % P->P1;
     while (t.b1 >= P->P)
       t.b1 = (t.b1 + t.a1) % P->P1;
-    kv_push(unsigned, ret, P->W + t.b1);
+    kv_push(unsigned, *dst, P->W + t.b1);
   }
-  return ret;
 }
