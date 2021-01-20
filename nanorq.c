@@ -367,10 +367,6 @@ size_t nanorq_block_symbols(nanorq *rq, uint8_t sbn) {
 
 size_t nanorq_max_blocks(nanorq *rq) { return Z_max; }
 
-size_t nanorq_max_repair(nanorq *rq, uint8_t sbn) {
-  return (uint32_t)((1 << 20) - nanorq_block_symbols(rq, sbn));
-}
-
 size_t nanorq_blocks(nanorq *rq) {
   return (size_t)(rq->src_part.JL + rq->src_part.JS);
 }
@@ -405,6 +401,8 @@ size_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
       }
     }
   } else {
+    if (esi > ((1 << 24) - 1))
+      return 0;
     // esi is for repair symbol
     if (!enc->inverted)
       enc->inverted = nanorq_generate_symbols(rq, sbn, io);

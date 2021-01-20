@@ -46,9 +46,6 @@ uint32_t nanorq_tag(uint8_t sbn, uint32_t esi);
 // return the max number of blocks allowed
 size_t nanorq_max_blocks(nanorq *rq);
 
-// return the max number of repair symbols allowed
-size_t nanorq_max_repair(nanorq *rq, uint8_t sbn);
-
 // precalculate precode matrix inversion
 bool nanorq_precalculate(nanorq *rq);
 
