@@ -4,7 +4,7 @@ static void precode_matrix_permute(octmat *D, int P[], int n) {
   for (int i = 0; i < n; i++) {
     int at = i, mark = -1;
     while (P[at] >= 0) {
-      oswaprow(om_P(*D), i, P[at], D->cols);
+      oswaprow(D, i, P[at]);
       int tmp = P[at];
       P[at] = mark;
       at = tmp;
@@ -15,9 +15,9 @@ static void precode_matrix_permute(octmat *D, int P[], int n) {
 static void precode_matrix_apply_op(octmat *D, schedule *S, int i) {
   sched_op op = kv_A(S->ops, i);
   if (op.beta)
-    oaxpy(om_P(*D), om_P(*D), op.i, op.j, D->cols, op.beta);
+    oaxpy(D, D, op.i, op.j, op.beta);
   else
-    oscal(om_P(*D), op.i, D->cols, op.j);
+    oscal(D, op.i, op.j);
 }
 
 static void precode_matrix_apply_sched(octmat *D, schedule *S) {
@@ -57,13 +57,12 @@ static void precode_matrix_make_LDPC2(spmat *A, int W, int S, int P) {
   }
 }
 
-static octmat precode_matrix_make_HDPC(params *P) {
+static octmat *precode_matrix_make_HDPC(params *P) {
   int m = P->H;
   int n = P->Kprime + P->S;
 
   assert(m > 0 && n > 0);
-  octmat HDPC = OM_INITIAL;
-  om_resize(&HDPC, m, n);
+  octmat *HDPC = octmat_new(m, n);
 
   for (int row = 0; row < m; row++)
     om_A(HDPC, row, n - 1) = OCT_EXP[row];
@@ -267,15 +266,17 @@ static void precode_matrix_fill_U(wrkmat *U, spmat *A, spmat *AT, schedule *S) {
 }
 
 static void precode_matrix_fill_HDPC(params *P, wrkmat *U, schedule *S) {
-  octmat UL = OM_INITIAL, HDPC = precode_matrix_make_HDPC(P);
-  om_resize(&UL, P->H, S->u);
-  for (int row = 0; row < UL.rows; row++) {
-    for (int col = 0; col < UL.cols - P->H; col++)
+  // double the rows in case wrkmat needs to convert some gf2 rows to gf256
+  octmat *UL = octmat_new(2 * P->H, S->u);
+  octmat *HDPC = precode_matrix_make_HDPC(P);
+  // FIXME: in place HDPC fill
+  for (int row = 0; row < P->H; row++) {
+    for (int col = 0; col < S->u - P->H; col++)
       om_A(UL, row, col) =
-          om_A(HDPC, row, S->c[HDPC.cols - (S->u - P->H) + col]);
-    om_A(UL, row, row + (UL.cols - P->H)) = 1;
+          om_A(HDPC, row, S->c[HDPC->cols - (S->u - P->H) + col]);
+    om_A(UL, row, row + S->u - P->H) = 1;
   }
-  wrkmat_assign_block(U, &UL, P->S, 0, P->H, S->u);
+  wrkmat_assign_block(U, UL, P->S, 0, P->H, S->u);
   for (int row = 0; row < S->i; row++) {
     for (int h = 0; h < P->H; h++) {
       uint8_t beta = om_A(HDPC, h, S->c[row]);
@@ -285,7 +286,7 @@ static void precode_matrix_fill_HDPC(params *P, wrkmat *U, schedule *S) {
       }
     }
   }
-  om_destroy(&HDPC);
+  octmat_free(HDPC);
 }
 
 static wrkmat *precode_matrix_make_U(params *P, spmat *A, spmat *AT,

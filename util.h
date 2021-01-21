@@ -5,7 +5,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <octmat.h>
+#include "binmat.h"
+#include "octmat.h"
 
 #include "kvec.h"
 
@@ -21,7 +22,7 @@
 
 typedef struct {
   uint32_t esi;
-  octmat row;
+  octmat *row;
 } repair_sym;
 
 typedef kvec_t(repair_sym) repair_vec;
