@@ -70,7 +70,10 @@ static octmat precode_matrix_make_HDPC(params *P) {
 
   for (int col = n - 2; col >= 0; col--) {
     for (int row = 0; row < m; row++)
-      om_A(HDPC, row, col) = OCT_EXP[OCT_LOG[om_A(HDPC, row, col + 1)] + 1];
+      om_A(HDPC, row, col) =
+          (om_A(HDPC, row, col + 1) == 0)
+              ? 0
+              : OCT_EXP[OCT_LOG[om_A(HDPC, row, col + 1)] + 1];
     int b1 = rnd_get(col + 1, 6, m);
     int b2 = (b1 + rnd_get(col + 1, 7, m - 1) + 1) % m;
     om_A(HDPC, b1, col) ^= 1;
