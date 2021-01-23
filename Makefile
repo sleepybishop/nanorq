@@ -1,4 +1,5 @@
 OBJ=\
+bitmask.o\
 io.o\
 params.o\
 precode.o\
