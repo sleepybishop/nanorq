@@ -110,7 +110,7 @@ static void precode_matrix_sort(params *P, spmat *A, schedule *S) {
 
 static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
                                  schedule *S, spmat *NZT) {
-  int chosen = Vrows, r = Vcols + 1;
+  int chosen = Vrows;
   for (int b = 1; b < 3; b++) {
     uint_vec ns = NZT->idxs[b];
     while (kv_size(ns) > 0) {
@@ -119,75 +119,36 @@ static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
         return S->di[chosen];
     }
   }
-  for (int row = V0; row < Srows; row++) {
-    int nz = S->nz[S->d[row]];
-    if (nz > 0 && nz < r) {
-      chosen = row;
-      r = nz;
-      if (nz < 2)
-        break;
-    }
-  }
-  return chosen;
+  assert(0);
 }
 
-static int precode_row_nz_fwd(spmat *A, int row, int s, int e, schedule *S) {
-  int min = e;
+static int precode_row_nz_at(spmat *A, int row, int s, int e, schedule *S,
+                             int *at) {
+  int r = 0;
+  at[0] = at[1] = e;
   uint_vec rs = A->idxs[S->d[row]];
-  for (int it = 0; it < kv_size(rs); it++) {
+  for (int it = 0; it < kv_size(rs) && r < S->nz[S->d[row]]; it++) {
     int col = S->ci[kv_A(rs, it)];
-    if (col >= s && col < e && col < min) {
-      min = col;
-    }
+    if (col >= s && col < e)
+      at[r++] = col;
   }
-  return min;
+  if (at[0] > at[1])
+    TMPSWAP(int, at[0], at[1]);
+  return r;
 }
 
-static int precode_row_nz_rev(spmat *A, int row, int s, int e, schedule *S) {
-  int tailsz = 10, tail[10]; // keep track of last N and find first zero col
-  for (int t = 0; t < tailsz; t++)
-    tail[t] = 0;
-  uint_vec rs = A->idxs[S->d[row]];
-  for (int it = 0; it < kv_size(rs); it++) {
-    int col = S->ci[kv_A(rs, it)];
-    if (col > (e - tailsz) && col < e) {
-      tail[col - (e - tailsz)] = col;
-    }
+static int precode_matrix_swap_cols(spmat *A, int V0, int Vcols, schedule *S) {
+  int *c = S->c, *ci = S->ci, ones[2], Vlast = V0 + Vcols - 1;
+  int r = precode_row_nz_at(A, V0, V0, V0 + Vcols, S, ones);
+  if (ones[0] != V0) {
+    TMPSWAP(int, c[V0], c[ones[0]]);
+    TMPSWAP(int, ci[c[V0]], ci[c[ones[0]]]);
   }
-  for (int j = (tailsz - 1); j >= 0; j--) {
-    if (tail[j] == 0) {
-      return j + e - tailsz;
-    }
+  if (r == 2 && ones[1] != Vlast) {
+    TMPSWAP(int, c[Vlast], c[ones[1]]);
+    TMPSWAP(int, ci[c[Vlast]], ci[c[ones[1]]]);
   }
-  return s;
-}
-
-static void precode_matrix_swap_first_col(spmat *A, int V0, int Vcols,
-                                          schedule *S) {
-  int *c = S->c, *ci = S->ci;
-  int first = precode_row_nz_fwd(A, V0, V0, V0 + Vcols, S);
-  if (first != V0) {
-    TMPSWAP(int, c[V0], c[first]);
-    TMPSWAP(int, ci[c[V0]], ci[c[first]]);
-  }
-}
-
-static void precode_matrix_swap_tail_cols(spmat *A, int row, int s, int e,
-                                          schedule *S) {
-  while (s < e) {
-    int swap1 = precode_row_nz_fwd(A, row, s, e, S);
-    if (swap1 == e)
-      return;
-    int swap2 = precode_row_nz_rev(A, row, s, e, S);
-    if (swap2 == s)
-      return;
-    if (swap1 >= swap2)
-      return;
-    TMPSWAP(int, S->c[swap1], S->c[swap2]);
-    TMPSWAP(int, S->ci[S->c[swap1]], S->ci[S->c[swap2]]);
-    s = swap1;
-    e = swap2;
-  }
+  return r;
 }
 
 static void precode_matrix_update_nnz(spmat *AT, int V0, int Vcols, int r,
@@ -229,9 +190,7 @@ static bool precode_matrix_precond(params *P, spmat *A, spmat *AT,
       TMPSWAP(int, d[V0], d[chosen]);
       TMPSWAP(int, di[d[V0]], di[d[chosen]]);
     }
-    int r = S->nz[d[V0]];
-    precode_matrix_swap_first_col(A, V0, Vcols, S);
-    precode_matrix_swap_tail_cols(A, V0, V0 + 1, V0 + Vcols, S);
+    int r = precode_matrix_swap_cols(A, V0, Vcols, S);
     precode_matrix_update_nnz(AT, V0, Vcols, r, S, NZT);
     i++;
     u += r - 1;
