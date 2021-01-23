@@ -465,7 +465,7 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
 
   struct block_encoder *dec = get_block_encoder(rq, sbn);
 
-  if (dec == NULL || esi >= rq->max_esi)
+  if (dec == NULL || esi > rq->max_esi)
     return NANORQ_SYM_ERR;
 
   if (bitmask_gaps(&dec->repair_mask, dec->K) == 0) {
