@@ -230,12 +230,12 @@ static void precode_matrix_fill_U(wrkmat *U, spmat *A, spmat *AT, schedule *S) {
 
 static void precode_matrix_fill_HDPC(params *P, wrkmat *U, schedule *S) {
   octmat UL = OM_INITIAL, HDPC = precode_matrix_make_HDPC(P);
-  om_resize(&UL, P->H, S->u);
-  for (int row = 0; row < UL.rows; row++) {
+  om_resize(&UL, 2 * P->H, S->u);
+  for (int row = 0; row < P->H; row++) {
     for (int col = 0; col < UL.cols - P->H; col++)
       om_A(UL, row, col) =
           om_A(HDPC, row, S->c[HDPC.cols - (S->u - P->H) + col]);
-    om_A(UL, row, row + (UL.cols - P->H)) = 1;
+    om_A(UL, row, row + (UL.cols - P->H)) = 1; // I_H
   }
   wrkmat_assign_block(U, &UL, P->S, 0, P->H, S->u);
   for (int row = 0; row < S->i; row++) {

@@ -30,20 +30,7 @@ void wrkmat_free(wrkmat *w) {
 }
 
 void wrkmat_assign_block(wrkmat *w, octmat *B, int i, int j, int m, int n) {
-  octmat F = OM_INITIAL;
-  om_resize(&F, 2 * m, w->cols);
-  for (int row = 0; row < m; row++) {
-    for (int col = 0; col < n; col++) {
-      om_A(F, row, col) = om_A(*B, row, col);
-      gf2mat_set(w->GF2, row + i, col + j, om_A(F, row, col) > 0);
-    }
-    for (int col = n; col < w->cols; col++) {
-      om_A(F, row, col) = gf2_at(w->GF2, row + i, col);
-    }
-  }
-
-  om_destroy(B);
-  w->GF256 = F;
+  w->GF256 = *B;
 
   // overlay GF256 block over GF2
   for (int row = i; row < i + m; row++) {
