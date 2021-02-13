@@ -407,8 +407,7 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
     precode_matrix_fill_HDPC(P, U, S);
     rank = precode_matrix_solve_gf256(P, U, S);
     if (rank < P->L) {
-      precode_matrix_cleanup(A, AT, S, U);
-      return false;
+      return precode_matrix_cleanup(A, AT, S, U);
     }
   }
   S->marks[1] = kv_size(S->ops) - 1;
