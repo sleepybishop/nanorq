@@ -112,9 +112,8 @@ static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
                                  schedule *S, spmat *NZT) {
   int chosen = Vrows, r = Vcols + 1;
   for (int b = 1; b < 3; b++) {
-    uint_vec ns = NZT->idxs[b];
-    while (kv_size(ns) > 0) {
-      chosen = kv_pop(ns);
+    while (kv_size(NZT->idxs[b]) > 0) {
+      chosen = kv_pop(NZT->idxs[b]);
       if (S->di[chosen] >= V0 && S->nz[chosen] == b)
         return S->di[chosen];
     }
