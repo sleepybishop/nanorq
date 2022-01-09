@@ -1,17 +1,17 @@
 OBJ=\
-bitmask.o\
-io.o\
-params.o\
-precode.o\
-rand.o\
-sched.o\
-spmat.o\
-tuple.o\
-wrkmat.o\
-nanorq.o
+lib/bitmask.o\
+lib/io.o\
+lib/params.o\
+lib/precode.o\
+lib/rand.o\
+lib/sched.o\
+lib/spmat.o\
+lib/tuple.o\
+lib/wrkmat.o\
+lib/nanorq.o
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
-CFLAGS   = -O3 -g -std=c99 -Wall -I. -Ioblas
+CFLAGS   = -O3 -g -std=c99 -Wall -I. -Iinclude -Ideps/oblas
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline
 
 all: test libnanorq.a
@@ -43,15 +43,15 @@ graph.dat: benchmark
 graph.png: graph.dat graph.gnuplot
 	gnuplot -e "argtitle='Throughput (packet size=1280) `lscpu|grep -i 'model name'|cut -f2 -d:|xargs`'" graph.gnuplot 
 
-oblas/liboblas.a:
-	$(MAKE) -C oblas CPPFLAGS+="-DOBLAS_AVX -DOCTMAT_ALIGN=32"
+deps/oblas/liboblas.a:
+	$(MAKE) -C deps/oblas CPPFLAGS+="-DOBLAS_AVX -DOCTMAT_ALIGN=32"
 
 .PHONY: oblas_clean
 oblas_clean:
-	$(MAKE) -C oblas clean
+	$(MAKE) -C deps/oblas clean
 
-libnanorq.a: $(OBJ) oblas/liboblas.a
-	$(AR) rcs $@ $(OBJ) oblas/*.o
+libnanorq.a: $(OBJ) deps/oblas/liboblas.a
+	$(AR) rcs $@ $(OBJ) deps/oblas/*.o
 
 clean: oblas_clean
 	$(RM) encode decode *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old
