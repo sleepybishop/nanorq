@@ -3,6 +3,14 @@
 #include "bitmask.h"
 #include "nanorq.h"
 #include "precode.h"
+#include "tuple.h"
+
+#define APPLYROW(D, w, a, k)                                                   \
+  do {                                                                         \
+    uint8_t *tmp = om_R(*D, w);                                                \
+    for (int i = 0; i < k; i++)                                                \
+      a[i] ^= tmp[i];                                                          \
+  } while (0);
 
 struct oti_common {
   size_t F;  /* input size in bytes */
@@ -175,15 +183,24 @@ static bool load_symbol_matrix(nanorq *rq, uint8_t sbn, struct ioctx *io) {
 
 void decode_row(params *P, octmat *D, uint32_t row, uint8_t *ptr, size_t len) {
   memset(ptr, 0, len);
-  uint_vec idxs = {0};
-  kv_resize(unsigned, idxs, D->rows);
-  params_set_idxs(row, P, &idxs);
-  for (int idx = 0; idx < kv_size(idxs); idx++) {
-    const uint8_t *tmp = om_R(*D, kv_A(idxs, idx));
-    for (int i = 0; i < len; i++)
-      ptr[i] ^= tmp[i]; // ptr is unaligned, xor instead of oblas[oaddrow]
+  tuple t = gen_tuple(row, P);
+
+  // ptr might be unaligned so xor directly instead of using oblas
+  APPLYROW(D, t.b, ptr, len);
+  for (unsigned j = 1; j < t.d; j++) {
+    t.b = (t.b + t.a) % P->W;
+    APPLYROW(D, t.b, ptr, len);
   }
-  kv_destroy(idxs);
+  while (t.b1 >= P->P)
+    t.b1 = (t.b1 + t.a1) % P->P1;
+
+  APPLYROW(D, P->W + t.b1, ptr, len);
+  for (unsigned j = 1; j < t.d1; j++) {
+    t.b1 = (t.b1 + t.a1) % P->P1;
+    while (t.b1 >= P->P)
+      t.b1 = (t.b1 + t.a1) % P->P1;
+    APPLYROW(D, P->W + t.b1, ptr, len);
+  }
 }
 
 bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {

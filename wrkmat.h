@@ -18,11 +18,11 @@ typedef struct {
   int *type;
 } wrkmat;
 
-#define wrkmat_chk(w, i, j) (gf2_at(w->GF2, i, j))
+#define gf2row(a, r) (a->bits + (r)*a->stride)
+#define gf2el(a, i, j) ((gf2row(a, i)[(j) / 32] >> ((j) % 32)) & 1)
+
 #define wrkmat_at(w, i, j)                                                     \
-  (w->type[i] ? om_A(w->GF256, w->rowmap[i], j) : gf2_at(w->GF2, i, j))
-#define wrkmat_nnz(w, i, s, e) gf2mat_nnz(w->GF2, i, s, e)
-#define wrkmat_zero(w, i) gf2mat_zero(w->GF2, i)
+  (w->type[i] ? om_A(w->GF256, w->rowmap[i], j) : gf2el(w->GF2, i, j))
 
 wrkmat *wrkmat_new(int rows, int cols);
 void wrkmat_free(wrkmat *w);
