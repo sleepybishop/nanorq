@@ -1,15 +1,20 @@
 # nanorq
+[![CI](https://github.com/sleepybishop/nanorq/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/sleepybishop/nanorq/actions/workflows/ci.yml)
+
 nanorq is a compact, performant implementation of the raptorq fountain code capable of reaching multi-gigabit speeds on a single core.
 
-nanorq provides flexible I/O handling, wrappers are provided for memory buffers, mmap (zero copy) and streams. Additional abstractions can be implemented without interacting with the decoder logic.
+## Features
+  - **No internal memory allocations**. nanorq will ask you to provide the memory it needs.
+  - **No stdlib required**. The library itself can be built with `--nostdlib`[^1]
+  - **Data privacy**. The library generates operations to run on the data to be coded but the execution of those operations is left to the application.
 
-# Performance
+## Performance[^2]
 ![](graph.png)
 
-# Use cases
+## Use cases
 - firmware deployment / software updates
 - video streaming
 - large data transfers across high latency links
 
-## Notes
-  Default build is configured for AVX, adjust Makefile as needed for other archs
+[^1]: When compiled with `NDEBUG`. Test suite requires stdlib.
+[^2]: Default build is configured for `AVX2`, adjust Makefile as needed for other archs.

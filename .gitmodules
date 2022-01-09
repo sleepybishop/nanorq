@@ -1,3 +1,0 @@
-[submodule "oblas"]
-	path = deps/oblas
-	url = https://github.com/sleepybishop/oblas

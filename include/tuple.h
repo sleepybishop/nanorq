@@ -4,14 +4,14 @@
 #include "params.h"
 
 typedef struct {
-  uint32_t d;
-  uint32_t a;
-  uint32_t b;
-  uint32_t d1;
-  uint32_t a1;
-  uint32_t b1;
+    u32 d;
+    u32 a;
+    u32 b;
+    u32 d1;
+    u32 a1;
+    u32 b1;
 } tuple;
 
-tuple gen_tuple(uint32_t X, params *P);
+tuple gen_tuple(u32 X, params *P);
 
 #endif
