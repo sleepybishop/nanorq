@@ -202,6 +202,16 @@ void obl_scal(u8 *a, u8 u, unsigned k)
     OBL_SHUF(obl_scal, a, a, OBL_NOOP);
 }
 
+void obl_swap(u8 *a, u8 *b, unsigned k)
+{
+    register u8 *ap = a, *ae = &a[k], *bp = b;
+    for (; ap < ae; ap++, bp++) {
+        u8 tmp = *ap;
+        *ap = *bp;
+        *bp = tmp;
+    }
+}
+
 void obl_axpyb32(u8 *a, u32 *b, u8 u, unsigned k)
 {
     OBL_AXPYB32(a, b, u, k);
