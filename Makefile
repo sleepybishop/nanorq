@@ -13,8 +13,7 @@ t/00util/matgen\
 t/00util/repgen\
 t/00util/hdpcgen\
 t/00util/precond\
-t/00util/schedgen\
-t/00util/oblperf
+t/00util/schedgen
 
 CPPFLAGS := -DOBLAS_AVX2 -DALIGNSZ=32
 CFLAGS   = -O3 -g -std=c11 -Wall -Iinclude -Ideps/ -fPIC
@@ -34,8 +33,6 @@ t/00util/precond: t/00util/precond.o $(OBJ)
 
 t/00util/schedgen: t/00util/schedgen.o $(OBJ)
 
-t/00util/oblperf: t/00util/oblperf.o $(OBJ)
-
 test: CPPFLAGS=
 test: clean $(TEST_UTILS)
 	prove -I. -v t/*.t
@@ -51,7 +48,7 @@ indent:
 	find -name '*.[h,c]' | xargs clang-format -i
 
 scan:
-	scan-build $(MAKE) clean all
+	scan-build $(MAKE) CPPFLAGS= clean $(OBJ) 
 
 gperf: LDLIBS = -lprofiler -ltcmalloc
 gperf: clean ./t/00util/schedgen

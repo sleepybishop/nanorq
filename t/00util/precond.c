@@ -27,7 +27,6 @@ void work_matrix_print(params *P, pc *W, FILE *stream)
 
 int main(int argc, char *argv[])
 {
-    int ok = 0;
     nanorq rq;
     void *sched = NULL;
 
@@ -44,10 +43,10 @@ int main(int argc, char *argv[])
 
     size_t prep_len = nanorq_calculate_prepare_memory(&rq);
     uint8_t *prep_mem = calloc(1, prep_len);
-    ok = nanorq_prepare(&rq, prep_mem, prep_len);
+    nanorq_prepare(&rq, prep_mem, prep_len);
     size_t work_len = nanorq_calculate_work_memory(&rq);
     uint8_t *work_mem = calloc(1, work_len);
-    ok = nanorq_precalculate(&rq, work_mem, work_len);
+    nanorq_precalculate(&rq, work_mem, work_len);
     work_matrix_print(&rq.P, &rq.W, stdout);
 
     free(prep_mem);
