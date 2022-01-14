@@ -58,14 +58,14 @@ scan:
 	scan-build $(MAKE) CPPFLAGS= clean $(OBJ) $(TEST_UTILS) $(EXAMPLES)
 
 gperf: LDLIBS = -lprofiler -ltcmalloc
-gperf: clean ./t/00util/schedgen
-	CPUPROFILE_FREQUENCY=100000 CPUPROFILE=gperf.prof ./t/00util/schedgen 50000 > /dev/null
-	pprof ./t/00util/schedgen gperf.prof --callgrind > callgrind.gperf
+gperf: clean ./examples/encode
+	CPUPROFILE_FREQUENCY=100000 CPUPROFILE=gperf.prof ./examples/encode 56403 1280 10 /dev/zero > /dev/null
+	pprof ./examples/encode gperf.prof --callgrind > callgrind.gperf
 	gprof2dot --format=callgrind callgrind.gperf -z main | dot -T svg > gperf.svg
 
 ubsan: CC=clang
-ubsan: CFLAGS += -fsanitize=undefined,implicit-conversion
+ubsan: CFLAGS += -fsanitize=undefined
 ubsan: LDLIBS += -lubsan
-ubsan: clean ./t/00util/schedgen
-	./t/00util/schedgen 50000 > /dev/null
+ubsan: clean ./examples/encode
+	./examples/encode 56403 1280 10 /dev/zero > /dev/null
 
