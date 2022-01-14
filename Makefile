@@ -15,13 +15,15 @@ t/00util/hdpcgen\
 t/00util/precond\
 t/00util/schedgen
 
+EXAMPLES=\
+examples/encode\
+examples/decode
+
 CPPFLAGS := -DOBLAS_AVX2 -DALIGNSZ=32
 CFLAGS   = -O3 -g -std=c11 -Wall -Iinclude -Ideps/ -fPIC
-CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline -Wno-unused -Wno-sequence-point 
+CFLAGS  += -march=native -funroll-loops -ftree-vectorize -Wno-unused -Wno-sequence-point
 
-all: libnanorq.a
-
-main: main.o $(OBJ)
+all: libnanorq.a $(EXAMPLES)
 
 t/00util/matgen: t/00util/matgen.o $(OBJ)
 
@@ -33,8 +35,12 @@ t/00util/precond: t/00util/precond.o $(OBJ)
 
 t/00util/schedgen: t/00util/schedgen.o $(OBJ)
 
-test: CPPFLAGS=
-test: clean $(TEST_UTILS)
+examples/encode: examples/encode.o examples/operations.o $(OBJ)
+
+examples/decode: examples/decode.o examples/operations.o $(OBJ)
+
+check: CPPFLAGS=
+check: clean $(TEST_UTILS)
 	prove -I. -v t/*.t
 
 libnanorq.a:
@@ -42,13 +48,14 @@ libnanorq.a: $(OBJ)
 	$(AR) rcs $@ $(OBJ) 
 
 clean:
-	$(RM) main *.o *.a *.gperf *.prof t/00util/*.o $(TEST_UTILS) $(OBJ)
+	$(RM) *.gperf *.prof $(TEST_UTILS) $(EXAMPLES) $(OBJ)
+	find -name '*.[a,o]' | xargs $(RM)
 
 indent:
 	find -name '*.[h,c]' | xargs clang-format -i
 
 scan:
-	scan-build $(MAKE) CPPFLAGS= clean $(OBJ) 
+	scan-build $(MAKE) CPPFLAGS= clean $(OBJ) $(TEST_UTILS) $(EXAMPLES)
 
 gperf: LDLIBS = -lprofiler -ltcmalloc
 gperf: clean ./t/00util/schedgen
