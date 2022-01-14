@@ -40,7 +40,7 @@ examples/encode: examples/encode.o examples/operations.o $(OBJ)
 examples/decode: examples/decode.o examples/operations.o $(OBJ)
 
 check: CPPFLAGS=
-check: clean $(TEST_UTILS)
+check: clean $(TEST_UTILS) $(EXAMPLES)
 	prove -I. -v t/*.t
 
 libnanorq.a:
