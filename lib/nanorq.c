@@ -72,7 +72,7 @@ static void assign_prepare_memory(nanorq *rq, u8 *mem, size_t len)
     for (u32 i = 0; i < P->S; i++)
         ptr += u32_vec_init(&W->A[i], ptr, 0, snz, 0);
     for (u32 i = P->S + P->H, esi = 0; i < W->rows; i++, esi++) {
-        u32 nz = params_set_idxs(P, esi, &idxs);
+        params_set_idxs(P, esi, &idxs);
         ptr += u32_vec_init(&W->A[i], ptr, 0, GENC_MAX, 0);
         uv_clear(idxs);
     }
@@ -96,15 +96,20 @@ int nanorq_prepare(nanorq *rq, uint8_t *prep_mem, size_t pm_len)
     return precode_matrix_prepare(&rq->P, &rq->W);
 }
 
-int nanorq_replace_symbol(nanorq *rq, u32 row, u32 esi)
+void nanorq_get_packet_mix(nanorq *rq, u32 esi, u32_vec *mix)
+{
+    params *P = &rq->P;
+    u32 X = esi + (P->Kprime - P->K);
+    uv_clear(*mix);
+    params_set_idxs(P, X, mix);
+}
+
+void nanorq_replace_symbol(nanorq *rq, u32 row, u32 esi)
 {
     params *P = &rq->P;
     pc *W = &rq->W;
     row += P->H + P->S;
-    esi += P->Kprime - P->K;
-    uv_clear(W->A[row]);
-    params_set_idxs(P, esi, &W->A[row]);
-    return 0;
+    nanorq_get_packet_mix(rq, esi, &W->A[row]);
 }
 
 size_t nanorq_calculate_work_memory(nanorq *rq)
