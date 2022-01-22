@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
     }
 
     size_t prep_len = nanorq_calculate_prepare_memory(&rq);
-    uint8_t *prep_mem = calloc(1, prep_len);
+    uint8_t *prep_mem = malloc(prep_len);
     nanorq_prepare(&rq, prep_mem, prep_len);
 
     nanorq_replace_symbol(&rq, 0, K + 3);

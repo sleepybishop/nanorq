@@ -23,6 +23,11 @@ DECL_VEC(u8);
 #endif
 #define PAD(x) (DC(x, OBLAS_ALIGN) * OBLAS_ALIGN)
 
+#define uv_zero(v)                                                                                                                 \
+    for (u8 *ap = (u8 *)v.a; ap < (u8 *)(v.a + v.m); ap++) {                                                                       \
+        *ap ^= *ap;                                                                                                                \
+    }
+
 #define uv_push(v, x)                                                                                                              \
     do {                                                                                                                           \
         assert(((v).n) < (v).m);                                                                                                   \

@@ -45,10 +45,6 @@ static void assign_prepare_memory(nanorq *rq, u8 *mem, size_t len)
     u32 snz = 3 * DC(P->B, P->S) + 3;
     u8 *ptr = mem;
 
-    u32 tmp[GENC_MAX];
-    u32_vec idxs;
-    u32_vec_init(&idxs, (u8 *)tmp, 0, GENC_MAX, 0);
-
     W->rows = P->L + rq->overhead;
     W->cols = P->L;
     W->prep_mem.base = mem;
@@ -57,10 +53,13 @@ static void assign_prepare_memory(nanorq *rq, u8 *mem, size_t len)
 
     ptr += u32_vec_init(&W->c, ptr, W->cols, W->cols, 0);
     ptr += u32_vec_init(&W->ci, ptr, W->cols, W->cols, 0);
-    ptr += u32_vec_init(&W->cnz, ptr, W->cols, W->cols, 0);
     ptr += u32_vec_init(&W->d, ptr, W->rows, W->rows, 0);
     ptr += u32_vec_init(&W->di, ptr, W->rows, W->rows, 0);
+
+    ptr += u32_vec_init(&W->cnz, ptr, W->cols, W->cols, 0);
     ptr += u32_vec_init(&W->nz, ptr, W->rows, W->rows, 0);
+    uv_zero(W->cnz);
+    uv_zero(W->nz);
 
     W->NZT = (u32_vec *)(ptr);
     ptr += 3 * PAD(sizeof(u32_vec));
@@ -69,15 +68,17 @@ static void assign_prepare_memory(nanorq *rq, u8 *mem, size_t len)
 
     W->A = (u32_vec *)(ptr);
     ptr += W->rows * sizeof(u32_vec);
+    for (u32 i = 0; i < W->rows; i++)
+        W->A[i].n = W->A[i].m = 0;
     for (u32 i = 0; i < P->S; i++)
         ptr += u32_vec_init(&W->A[i], ptr, 0, snz, 0);
-    for (u32 i = P->S + P->H, esi = 0; i < W->rows; i++, esi++) {
-        params_set_idxs(P, esi, &idxs);
+    for (u32 i = P->S + P->H, esi = 0; i < W->rows; i++, esi++)
         ptr += u32_vec_init(&W->A[i], ptr, 0, GENC_MAX, 0);
-        uv_clear(idxs);
-    }
+
     W->AT = (u32_vec *)(ptr);
     ptr += W->cols * sizeof(u32_vec);
+    for (u32 i = 0; i < W->cols; i++)
+        W->AT[i].n = W->AT[i].m = 0;
 
     W->prep_mem.used = ptr - mem;
 
@@ -141,12 +142,16 @@ static void assign_work_memory(nanorq *rq, u8 *mem, size_t len)
 
     tmp = W->rows * DC(W->u, 8 * sizeof(u32));
     ptr += u32_vec_init(&W->U, ptr, tmp, tmp, tmp / W->rows);
+    uv_zero(W->U);
 
     ptr += u32_vec_init(&W->F.rowmap, ptr, W->rows, W->rows, 0);
     ptr += u32_vec_init(&W->F.type, ptr, W->rows, W->rows, 0);
+    uv_zero(W->F.rowmap);
+    uv_zero(W->F.type);
 
     tmp = 2 * P->H * W->u;
     ptr += u8_vec_init(&W->UL, ptr, tmp, tmp, W->u);
+    uv_zero(W->UL);
 
     tmp = P->H * (P->Kprime + P->S);
     ptr += u8_vec_init(&W->HDPC, ptr, tmp, tmp, P->Kprime + P->S);
