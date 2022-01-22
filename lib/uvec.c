@@ -21,20 +21,20 @@ u32 u32_vec_init(u32_vec *v, u8 *a, u32 n, u32 m, u32 s)
     return PAD(m * sizeof(u32));
 }
 
-u8 bm_get(u32_vec *m, u32 i, u32 j)
+u8 bm_get(u32_vec *v, u32 i, u32 j)
 {
-    u32 *a = m->a + i * m->s;
+    u32 *a = v->a + i * v->s;
     u32 q = j / 32;
     u32 r = j % 32;
     return (a[q] >> r) & 1;
 }
 
-void bm_set(u32_vec *m, u32 i, u32 j)
+void bm_set(u32_vec *v, u32 i, u32 j)
 {
-    u32 *a = m->a + i * m->s;
+    u32 *a = v->a + i * v->s;
     u32 q = j / 32;
     u32 r = j % 32;
-    a[q] = (a[q] & ~(1U << r)) | (1U << r);
+    a[q] ^= (1U << r);
 }
 
 void bm_add(u32_vec *v, u32 i, u32 j)
@@ -45,18 +45,33 @@ void bm_add(u32_vec *v, u32 i, u32 j)
         ap[idx] ^= bp[idx];
 }
 
-void bm_fill(u32_vec *m, u32 i, u8 *dst)
+void bm_fill(u32_vec *v, u32 i, u8 *dst)
 {
-    u32 *a = m->a + i * m->s;
-    for (u32 idx = 0; idx < m->s; idx++) {
-        u32 tmp = a[idx];
+    u32 *ap = v->a + i * v->s;
+    for (u32 idx = 0; idx < v->s; idx++) {
+        u32 tmp = ap[idx];
         while (tmp > 0) {
             u32 tz = __builtin_ctz(tmp);
-            u32 q = tz;
             tmp = tmp & (tmp - 1);
-            dst[q + idx * 32] |= 1U << (tz % 32);
+            dst[tz + idx * 32] |= 1U << (tz % 32);
         }
     }
+}
+
+u32 bm_gap(u32_vec *v, u32 i, u32 until)
+{
+    u32 *ap = v->a + i * v->s;
+    for (u32 idx = 0; idx < DC(until, 32); idx++) {
+        u32 tmp = ~ap[idx];
+        while (tmp > 0) {
+            u32 tz = __builtin_ctz(tmp);
+            tmp = tmp & (tmp - 1);
+            u32 at = tz + idx * 32;
+            if (at < until)
+                return at;
+        }
+    }
+    return UINT32_MAX;
 }
 
 #endif

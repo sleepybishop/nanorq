@@ -59,5 +59,6 @@ u32 u32_vec_init(u32_vec *v, u8 *a, u32 n, u32 m, u32 s);
 
 u8 bm_get(u32_vec *v, u32 i, u32 j);
 void bm_set(u32_vec *v, u32 i, u32 j);
-void bm_add(u32_vec *a, u32 i, u32 j);
-void bm_fill(u32_vec *m, u32 i, u8 *dst);
+void bm_add(u32_vec *v, u32 i, u32 j);
+void bm_fill(u32_vec *v, u32 i, u8 *dst);
+u32 bm_gap(u32_vec *v, u32 i, u32 until);
