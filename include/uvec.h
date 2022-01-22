@@ -18,10 +18,10 @@ DECL_VEC(u32);
 DECL_VEC(u8);
 
 #define DC(A, B) ((A) / (B) + ((A) % (B) ? 1 : 0))
-#ifndef ALIGNSZ
-#define ALIGNSZ sizeof(void *)
+#ifndef OBLAS_ALIGN
+#define OBLAS_ALIGN sizeof(void *)
 #endif
-#define PAD(x) (DC(x, ALIGNSZ) * ALIGNSZ)
+#define PAD(x) (DC(x, OBLAS_ALIGN) * OBLAS_ALIGN)
 
 #define uv_push(v, x)                                                                                                              \
     do {                                                                                                                           \

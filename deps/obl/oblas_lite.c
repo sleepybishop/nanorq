@@ -32,6 +32,8 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 #if defined(OBLAS_AVX512)
 #include <immintrin.h>
 
+#define OBLAS_ALIGN 64
+
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
         const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                   \
@@ -79,6 +81,8 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 #else
 #if defined(OBLAS_AVX2)
 #include <immintrin.h>
+
+#define OBLAS_ALIGN 32
 
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
@@ -128,6 +132,8 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 #include <tmmintrin.h>
 #endif
 
+#define OBLAS_ALIGN 16
+
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
         const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                   \
@@ -172,6 +178,8 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
     } while (0)
 
 #else
+
+#define OBLAS_ALIGN (sizeof(void *))
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
         op##_ref(a, b, u, k);                                                                                                      \

@@ -19,7 +19,7 @@ EXAMPLES=\
 examples/encode\
 examples/decode
 
-CPPFLAGS := -DOBLAS_AVX2 -DALIGNSZ=32
+CPPFLAGS := -DOBLAS_AVX2
 CFLAGS   = -O3 -g -std=c11 -Wall -Iinclude -Ideps/ -fPIC
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize -Wno-unused -Wno-sequence-point
 
@@ -35,8 +35,10 @@ t/00util/precond: t/00util/precond.o $(OBJ)
 
 t/00util/schedgen: t/00util/schedgen.o $(OBJ)
 
+examples/encode: CPPFLAGS += -D_DEFAULT_SOURCE
 examples/encode: examples/encode.o examples/operations.o $(OBJ)
 
+examples/decode: CPPFLAGS += -D_DEFAULT_SOURCE
 examples/decode: examples/decode.o examples/operations.o $(OBJ)
 
 check: CPPFLAGS=
