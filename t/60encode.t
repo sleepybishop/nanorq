@@ -15,7 +15,7 @@ subtest "schedules" => sub {
     my @ks = (10, 50, 100, 500, 1000, 5000, 10000, 50000, 56403);
     foreach (@ks) {
         my $expected = md5_file("@{[ASSETS_DIR]}/examples/encode/K_$_.txt");
-        my $resp = run_encode($_);
+        my ($timing, $resp) = run_encode($_);
         is md5_hex($resp), $expected, "encode K: $_";
     }
 };

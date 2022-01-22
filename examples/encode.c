@@ -1,21 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 #include <err.h>
 
 #include <nanorq.h>
 #include "operations.h"
 
-static size_t get_filesize(const char *f)
+#define NSECS 1000000000L
+static int64_t timespec_diff(const struct timespec *t1, const struct timespec *t0)
 {
-    size_t sz = 0;
-    FILE *h = fopen(f, "r");
-    if (!h)
-        return 0;
-    fseek(h, 0, SEEK_END);
-    sz = ftell(h);
-    fclose(h);
-    return sz;
+    int64_t sec = (int64_t)t1->tv_sec - (int64_t)t0->tv_sec;
+    int64_t nsec = (int64_t)t1->tv_nsec - (int64_t)t0->tv_nsec;
+    return (int64_t)((int64_t)sec * NSECS) + nsec;
+}
+
+static struct timespec now(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts;
 }
 
 static void prepare_data_mat(u8_vec *D, const char *f, u32 rows, u32 T, u32 K, u32 SH)
@@ -45,6 +49,7 @@ int main(int argc, char *argv[])
     schedule S = {};
     u8_vec D;
 
+    struct timespec calc_start, calc_end, ops_start, ops_end;
     if (argc < 5)
         errx(EXIT_FAILURE, "usage: %s <K> <T> <R> <file>\n", argv[0]);
 
@@ -60,17 +65,21 @@ int main(int argc, char *argv[])
     if (R < 1)
         errx(EXIT_FAILURE, "R [repair_count] should be > 0\n");
 
-    int F = get_filesize(argv[4]);
-    if (F < 0 || F > 56403 * T)
-        errx(EXIT_FAILURE, "Size of data file out of range (%d, %d)\n", 0, 56403 * T);
-
     if (0 != nanorq_encoder_new(K, 0, &rq))
         errx(EXIT_FAILURE, "failed to init codec\n");
 
+    calc_start = now();
     size_t prep_len = nanorq_calculate_prepare_memory(&rq);
     uint8_t *prep_mem = malloc(prep_len);
     ok = nanorq_prepare(&rq, prep_mem, prep_len);
     assert(ok);
+
+    size_t work_len = nanorq_calculate_work_memory(&rq);
+    uint8_t *work_mem = malloc(work_len);
+    nanorq_set_op_callback(&rq, &S, ops_push);
+    ok = nanorq_precalculate(&rq, work_mem, work_len);
+    assert(ok);
+    calc_end = now();
 
     u32 rows = nanorq_get_pc_rows(&rq);
     u32 SH = nanorq_get_pc_genc_offset(&rq);
@@ -79,23 +88,23 @@ int main(int argc, char *argv[])
     u8_vec_init(&D, base, mem, mem, PAD(T));
     prepare_data_mat(&D, argv[4], rows, T, K, SH);
 
-    size_t work_len = nanorq_calculate_work_memory(&rq);
-    uint8_t *work_mem = malloc(work_len);
-    nanorq_set_op_callback(&rq, &S, ops_push);
-    ok = nanorq_precalculate(&rq, work_mem, work_len);
-    assert(ok);
-
+    ops_start = now();
     ops_run(&rq, &D, &S);
+    ops_end = now();
 
     u8 reppkt[PAD(T)];
     for (u32 rp = 0; rp < R; rp++) {
         ops_mix(&rq, &D, K + rp, reppkt);
         fprintf(stdout, "RP %3d:", rp);
-        for (u32 i = 0; i < T; i++) {
+        for (u32 i = 0; i < T; i++)
             fprintf(stdout, "%02x", reppkt[i]);
-        }
         fprintf(stdout, "\n");
     }
+
+    double calc_time = timespec_diff(&calc_end, &calc_start) / (double)NSECS;
+    double ops_time = timespec_diff(&ops_end, &ops_start) / (double)NSECS;
+
+    fprintf(stderr, "calc: %.6fs ops: %.6fs bytes: %u\n", calc_time, ops_time, T * K);
 
     free(prep_mem);
     free(work_mem);
