@@ -15,10 +15,13 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt update
-          sudo apt install clang-tools
+          sudo apt install clang-tools valgrind
 
       - name: Tests
         run: make check
 
       - name: Clang Analyzer
         run: make scan
+
+      - name: Valgrind
+        run: make valgrind

@@ -55,7 +55,17 @@ indent:
 	find -name '*.[h,c]' | xargs clang-format -i
 
 scan:
-	scan-build $(MAKE) CPPFLAGS= clean $(OBJ) $(TEST_UTILS) $(EXAMPLES)
+	scan-build --status-bugs $(MAKE) CPPFLAGS=-D_DEFAULT_SOURCE clean $(OBJ) $(TEST_UTILS) $(EXAMPLES)
+
+valgrind: CPPFLAGS=-Wall -Iinclude -Ideps/ -fPIC
+valgrind: CFLAGS = -O0 -g -std=c11
+valgrind: clean $(TEST_UTILS) $(EXAMPLES)
+	valgrind --error-exitcode=2 ./t/00util/hdpcgen  500 > /dev/null
+	valgrind --error-exitcode=2 ./t/00util/matgen   500 > /dev/null
+	valgrind --error-exitcode=2 ./t/00util/precond  500 > /dev/null
+	valgrind --error-exitcode=2 ./t/00util/repgen   500 > /dev/null
+	valgrind --error-exitcode=2 ./t/00util/schedgen 500 > /dev/null
+	valgrind --error-exitcode=2 ./examples/encode   500 64 10 t/assets/sample_data/raw > /dev/null
 
 gperf: LDLIBS = -lprofiler -ltcmalloc
 gperf: clean ./examples/encode
