@@ -5,21 +5,30 @@
 
 #include <nanorq.h>
 
-#define hf_at(W, i, j) (uv_A((W)->F.type, (i)) ? uv_E((W)->UL, uv_A((W)->F.rowmap, (i)), (j)) : bm_at(&(W)->U, (i), (j)))
-void work_matrix_print(params *P, pc *W, FILE *stream)
+void precode_matrix_print(params *P, pc *W, FILE *stream)
 {
-    u32 m = W->rows, n = W->u;
-    u32_vec *d = &W->d;
-    fprintf(stream, "U[%ux%u]\n", m, n);
+    u32 m = W->rows, n = W->cols;
+    u8 tmp[n];
+    fprintf(stream, "A[%ux%u],i_u[%u|%u]\n", m, n, W->i, W->u);
+    for (u32 col = 0; col < n; col++)
+        fprintf(stream, "%s", col == (n - W->u - 1) ? "*" : " ");
+    fprintf(stream, "\n");
     for (u32 row = 0; row < m; row++) {
-        int drow = d ? uv_A(*d, row) : row;
-        for (u32 col = 0; col < n; col++) {
-            u8 val = hf_at(W, drow, col);
-            if (val > 1)
+        for (u32 x = 0; x < n; x++)
+            tmp[x] = 0;
+        u32 drow = uv_A(W->d, row);
+        for (u32 it = 0; it < uv_size(W->A[drow]); it++) {
+            u32 col = uv_A(W->A[drow], it);
+            u32 ccol = uv_A(W->ci, col);
+            tmp[ccol] = 1;
+        }
+        for (u32 col = 0; col < n; col++)
+            if (drow >= P->S && drow < (P->S + P->H))
                 fprintf(stream, "x");
             else
-                fprintf(stream, "%d", val);
-        }
+                fprintf(stream, "%d", tmp[col]);
+        if (row == W->i - 1)
+            fprintf(stream, "*");
         fprintf(stream, "\n");
     }
     fflush(stream);
@@ -44,13 +53,9 @@ int main(int argc, char *argv[])
     size_t prep_len = nanorq_calculate_prepare_memory(&rq);
     uint8_t *prep_mem = malloc(prep_len);
     nanorq_prepare(&rq, prep_mem, prep_len);
-    size_t work_len = nanorq_calculate_work_memory(&rq);
-    uint8_t *work_mem = malloc(work_len);
-    nanorq_precalculate(&rq, work_mem, work_len);
-    work_matrix_print(&rq.P, &rq.W, stdout);
+    precode_matrix_print(&rq.P, &rq.W, stdout);
 
     free(prep_mem);
-    free(work_mem);
 
     return 0;
 }

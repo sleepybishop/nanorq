@@ -13,6 +13,7 @@ t/00util/matgen\
 t/00util/repgen\
 t/00util/hdpcgen\
 t/00util/precond\
+t/00util/ult\
 t/00util/schedgen
 
 EXAMPLES=\
@@ -32,6 +33,8 @@ t/00util/repgen: t/00util/repgen.o $(OBJ)
 t/00util/hdpcgen: t/00util/hdpcgen.o $(OBJ)
 
 t/00util/precond: t/00util/precond.o $(OBJ)
+
+t/00util/ult: t/00util/ult.o $(OBJ)
 
 t/00util/schedgen: t/00util/schedgen.o $(OBJ)
 
@@ -66,6 +69,7 @@ valgrind: clean $(TEST_UTILS) $(EXAMPLES)
 	valgrind --error-exitcode=2 ./t/00util/matgen   500 > /dev/null
 	valgrind --error-exitcode=2 ./t/00util/precond  500 > /dev/null
 	valgrind --error-exitcode=2 ./t/00util/repgen   500 > /dev/null
+	valgrind --error-exitcode=2 ./t/00util/ult      500 > /dev/null
 	valgrind --error-exitcode=2 ./t/00util/schedgen 500 > /dev/null
 	valgrind --error-exitcode=2 ./examples/encode   500 64 10 t/assets/sample_data/raw > /dev/null
 
