@@ -3,7 +3,7 @@
 
 static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 {
-    register u8 *u_row = &GF2_8_MUL[u << 8];
+    register const u8 *u_row = &GF2_8_MUL[u << 8];
     register u8 *ap = a, *ae = &a[k], *bp = b;
     for (; ap != ae; ap++, bp++)
         *ap ^= u_row[*bp];
@@ -11,7 +11,7 @@ static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 
 static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
 {
-    register u8 *u_row = &GF2_8_MUL[u << 8];
+    register const u8 *u_row = &GF2_8_MUL[u << 8];
     register u8 *ap = a, *ae = &a[k];
     for (; ap != ae; ap++)
         *ap = u_row[*ap];
