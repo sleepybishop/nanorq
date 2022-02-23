@@ -2,7 +2,7 @@
 #define GF2_8_MUL_TABLE
 
 /* clang-format off */
-static uint8_t GF2_8_MUL[] =
+static const uint8_t GF2_8_MUL[] =
 {
   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 
   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 
