@@ -110,7 +110,7 @@ static void precode_matrix_sort(params *P, spmat *A, schedule *S) {
 
 static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
                                  schedule *S, spmat *NZT) {
-  int chosen = Vrows;
+  int chosen = Srows, r = Vcols + 1;
   for (int b = 1; b < 3; b++) {
     while (kv_size(NZT->idxs[b]) > 0) {
       chosen = kv_pop(NZT->idxs[b]);
@@ -118,7 +118,14 @@ static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
         return S->di[chosen];
     }
   }
-  assert(0);
+  for (int row = V0; row < Srows; row++) {
+    int nz = S->nz[S->d[row]];
+    if (nz > 0 && nz < r) {
+      chosen = row;
+      r = nz;
+    }
+  }
+  return chosen;
 }
 
 static int precode_row_nz_at(spmat *A, int row, int s, int e, schedule *S,
