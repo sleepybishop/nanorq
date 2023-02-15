@@ -12,7 +12,7 @@ lib/nanorq.o
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
 CFLAGS   = -O3 -g -std=c99 -Wall -I. -Iinclude -Ideps/oblas
-CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline
+CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline -fstack-protector-all
 
 all: test libnanorq.a
 
@@ -23,7 +23,8 @@ encode: encode.o libnanorq.a
 
 decode: decode.o libnanorq.a
 
-benchmark: benchmark.o libnanorq.a
+benchmark: benchmark.c libnanorq.a
+	$(CC) $(CFLAGS) benchmark.c -o $@ libnanorq.a $(LDLIBS)
 
 bench: graph.dat
 	cat graph.dat
@@ -54,7 +55,7 @@ libnanorq.a: $(OBJ) deps/oblas/liboblas.a
 	$(AR) rcs $@ $(OBJ) deps/oblas/*.o
 
 clean: oblas_clean
-	$(RM) encode decode *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old
+	$(RM) encode decode lib/*.o *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old
 
 indent:
 	clang-format -style=LLVM -i *.c *.h
@@ -68,18 +69,18 @@ profile:
 	gprof2dot --format=callgrind callgrind.out.* -z main | dot -T svg > callgrind.svg
 
 gcov: CFLAGS += -O0 -fprofile-arcs -ftest-coverage
-gcov: LDFLAGS = -lgcov --coverage
+gcov: LDLIBS = -lgcov --coverage
 gcov: clean benchmark
 	./benchmark 1280 1000 5.0
 
-gperf: LDFLAGS = -lprofiler -ltcmalloc
+gperf: LDLIBS = -lprofiler -ltcmalloc
 gperf: clean benchmark
 	CPUPROFILE_FREQUENCY=100000 CPUPROFILE=gperf.prof ./benchmark 1280 50000 5.0
 	pprof ./benchmark gperf.prof --callgrind > callgrind.gperf
 	gprof2dot --format=callgrind callgrind.gperf -z main | dot -T svg > gperf.svg
 #	pprof ./encode gperf.prof --text
 
-gheap: LDFLAGS = -lprofiler -ltcmalloc
+gheap: LDLIBS = -lprofiler -ltcmalloc
 gheap: clean benchmark
 	$(RM) gmem.prof.*
 	HEAPPROFILE=gmem.prof HEAP_PROFILE_INUSE_INTERVAL=1024000 ./benchmark 1280 50000 5.0
@@ -92,8 +93,8 @@ perf:
 	#perf report
 
 ubsan: CC=clang
-ubsan: CFLAGS += -fsanitize=undefined,implicit-conversion,integer
-ubsan: LDFLAGS += -lubsan
+ubsan: CFLAGS += -fsanitize=address,undefined,implicit-conversion,integer
+ubsan: LDLIBS += -lubsan
 ubsan: clean benchmark
 	./benchmark 1280 50000 0
 
