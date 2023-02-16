@@ -22,7 +22,7 @@ examples/decode
 
 CPPFLAGS := -DOBLAS_AVX2
 CFLAGS   = -O3 -g -std=c11 -Wall -Iinclude -Ideps/ -fPIC
-CFLAGS  += -march=native -funroll-loops -ftree-vectorize -Wno-unused -Wno-sequence-point
+CFLAGS  += -march=native -funroll-loops -ftree-vectorize -Wno-unused -Wno-sequence-point -fstack-protector-all
 
 all: libnanorq.a $(EXAMPLES)
 
@@ -80,7 +80,7 @@ gperf: clean ./examples/encode
 	gprof2dot --format=callgrind callgrind.gperf -z main | dot -T svg > gperf.svg
 
 ubsan: CC=clang
-ubsan: CFLAGS += -fsanitize=undefined
+ubsan: CFLAGS += -fsanitize=address,undefined
 ubsan: LDLIBS += -lubsan
 ubsan: clean ./examples/encode
 	./examples/encode 56403 1280 10 /dev/zero > /dev/null
