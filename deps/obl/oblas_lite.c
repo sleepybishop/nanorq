@@ -1,4 +1,32 @@
 #include "oblas_lite.h"
+
+#if defined(OBLAS_TINY)
+static inline uint8_t gf2_8_mul(uint16_t a, uint16_t b)
+{
+    if (!a || !b) {
+        return 0;
+    }
+
+    // Perform 8-bit, carry-less multiplication of |a| and |b|.
+    return GF2_8_EXP[GF2_8_LOG[a] + GF2_8_LOG[b]];
+}
+
+static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
+{
+    register u8 *ap = a, *ae = &a[k], *bp = b;
+    for (; ap != ae; ap++, bp++)
+        *ap ^= gf2_8_mul(u, *bp);
+}
+
+static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
+{
+    (void)b;
+    register u8 *ap = a, *ae = &a[k];
+    for (; ap != ae; ap++)
+        *ap = gf2_8_mul(u, *ap);
+}
+
+#else
 #include "gf2_8_mul_table.h"
 
 static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
@@ -11,11 +39,13 @@ static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 
 static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
 {
+    (void)b;
     register const u8 *u_row = &GF2_8_MUL[u << 8];
     register u8 *ap = a, *ae = &a[k];
     for (; ap != ae; ap++)
         *ap = u_row[*ap];
 }
+#endif
 
 void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 {
