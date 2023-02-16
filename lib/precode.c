@@ -113,29 +113,39 @@ void precode_matrix_on_op(void *arg, u32 i, u16 j, u8 u)
 static u32 precode_row_nz_at(pc *W, u32 row, u32 s, u32 e, u32 *at)
 {
     u32 r = 0, drow = uv_A(W->d, row);
-    at[0] = at[1] = e;
     u32_vec rs = W->A[drow];
     for (u32 it = 0; it < uv_size(rs) && r < uv_A(W->nz, drow); it++) {
         u32 col = uv_A(W->ci, uv_A(rs, it));
-        if (col >= s && col < e)
-            at[r++] = col;
+        if (col >= s && col < e) {
+            if (r < 32)
+              at[r] = col;
+            r++;
+        }
     }
-    if (at[0] > at[1])
-        TMPSWAP(u32, at[0], at[1]);
     return r;
 }
 
 static u8 precode_matrix_swap_cols(pc *W, u32 V0, u32 Vcols)
 {
-    u32 ones[2], Ve = V0 + Vcols - 1, r = 0;
+    u32 ones[32], Ve = V0 + Vcols - 1, r = 0;
     r = precode_row_nz_at(W, V0, V0, V0 + Vcols, ones);
+    if (r == 0)
+        return 0;
+    u32 first = 0;
+    for (u32 i = 1; i < r; i++)
+        if (ones[i] < ones[first])
+            first = i;
+    if (first != 0)
+        TMPSWAP(u32, ones[0], ones[first]);
     if (ones[0] != V0) {
         TMPSWAP(u32, uv_A(W->c, V0), uv_A(W->c, ones[0]));
         TMPSWAP(u32, uv_A(W->ci, uv_A(W->c, V0)), uv_A(W->ci, uv_A(W->c, ones[0])));
     }
-    if (r == 2 && ones[1] != Ve) {
-        TMPSWAP(u32, uv_A(W->c, Ve), uv_A(W->c, ones[1]));
-        TMPSWAP(u32, uv_A(W->ci, uv_A(W->c, Ve)), uv_A(W->ci, uv_A(W->c, ones[1])));
+    for (u32 l = 1; l < r; l++, Ve--) {
+        if (ones[1] != Ve) {
+            TMPSWAP(u32, uv_A(W->c, Ve), uv_A(W->c, ones[l]));
+            TMPSWAP(u32, uv_A(W->ci, uv_A(W->c, Ve)), uv_A(W->ci, uv_A(W->c, ones[l])));
+        }
     }
     return r;
 }
