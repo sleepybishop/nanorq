@@ -1,5 +1,9 @@
 #include "precode.h"
-
+/* shortcuts are taken here
+ *  - component / original degree tracking is skipped for speed
+ *  - it might result in decoding failures until more symbols are added
+ *  - different choose implementations can be added here
+ */
 u32 precode_matrix_choose(void *arg, pc *W, u32 V0, u32 Vrows, u32 Srows, u32 Vcols)
 {
     u32 chosen = Vrows;
@@ -10,6 +14,5 @@ u32 precode_matrix_choose(void *arg, pc *W, u32 V0, u32 Vrows, u32 Srows, u32 Vc
                 return uv_A(W->di, chosen);
         }
     }
-    assert(0);
-    return chosen;
+    return Srows;
 }
