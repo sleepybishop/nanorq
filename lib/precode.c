@@ -108,9 +108,13 @@ static void precode_matrix_sort(params *P, spmat *A, schedule *S) {
   }
 }
 
+/* shortcuts are taken here
+ *  - component / original degree tracking is skipped for speed
+ *  - it might result in decoding failures until more symbols are added
+ */
 static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
                                  schedule *S, spmat *NZT) {
-  int chosen = Srows, r = Vcols + 1;
+  int chosen = Vrows;
   for (int b = 1; b < 3; b++) {
     while (kv_size(NZT->idxs[b]) > 0) {
       chosen = kv_pop(NZT->idxs[b]);
@@ -118,51 +122,34 @@ static int precode_matrix_choose(int V0, int Vrows, int Srows, int Vcols,
         return S->di[chosen];
     }
   }
-  for (int row = V0; row < Srows; row++) {
-    int nz = S->nz[S->d[row]];
-    if (nz > 0 && nz < r) {
-      chosen = row;
-      r = nz;
-    }
-  }
-  return chosen;
+  return Srows;
 }
 
-static int precode_row_nz_at(spmat *A, int row, int s, int e, schedule *S,
-                             int *at) {
+int precode_row_nz_at(spmat *A, int row, int s, int e, schedule *S, int *at) {
   int r = 0;
+  at[0] = at[1] = e;
   uint_vec rs = A->idxs[S->d[row]];
   for (int it = 0; it < kv_size(rs) && r < S->nz[S->d[row]]; it++) {
     int col = S->ci[kv_A(rs, it)];
-    if (col >= s && col < e) {
-      if (r < 32)
-        at[r] = col;
-      r++;
-    }
+    if (col >= s && col < e)
+      at[r++] = col;
   }
+  if (at[0] > at[1])
+    TMPSWAP(int, at[0], at[1]);
   return r;
 }
 
 static int precode_matrix_swap_cols(spmat *A, int V0, int Vcols, schedule *S) {
-  int *c = S->c, *ci = S->ci, ones[32], Vlast = V0 + Vcols - 1;
+  int *c = S->c, *ci = S->ci, ones[2], Vlast = V0 + Vcols - 1;
   int r = precode_row_nz_at(A, V0, V0, V0 + Vcols, S, ones);
-  if (r == 0)
-    return 0;
-  int first = 0;
-  for (int i = 1; i < r; i++)
-    if (ones[i] < ones[first])
-      first = i;
-  if (first != 0)
-    TMPSWAP(int, ones[0], ones[first]);
   if (ones[0] != V0) {
     TMPSWAP(int, c[V0], c[ones[0]]);
     TMPSWAP(int, ci[c[V0]], ci[c[ones[0]]]);
   }
-  for (int l = 1; l < r; l++, Vlast--)
-    if (ones[l] != Vlast) {
-      TMPSWAP(int, c[Vlast], c[ones[l]]);
-      TMPSWAP(int, ci[c[Vlast]], ci[c[ones[l]]]);
-    }
+  if (r == 2 && ones[1] != Vlast) {
+    TMPSWAP(int, c[Vlast], c[ones[1]]);
+    TMPSWAP(int, ci[c[Vlast]], ci[c[ones[1]]]);
+  }
   return r;
 }
 
