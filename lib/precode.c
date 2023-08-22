@@ -200,7 +200,6 @@ static void precode_matrix_precond(params *P, spmat *A, spmat *AT,
   spmat_free(NZT);
   S->i = i;
   S->u = P->L - i;
-  return true;
 }
 
 static void precode_matrix_fwd_GE(wrkmat *U, schedule *S, spmat *AT, int s,
