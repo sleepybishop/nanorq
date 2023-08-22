@@ -160,7 +160,7 @@ static void precode_matrix_update_nnz(pc *W, u32 V0, u32 Vcols, u32 r)
     }
 }
 
-static int precode_matrix_precond(params *P, pc *W)
+static void precode_matrix_precond(params *P, pc *W)
 {
     u32 i = 0, u = P->P, Srows = W->rows - P->H;
 
@@ -174,7 +174,7 @@ static int precode_matrix_precond(params *P, pc *W)
         u32 Vrows = W->rows - i, Vcols = W->cols - i - u, V0 = i;
         u32 chosen = W->cb.on_choose(W->cb.on_choose_arg, W, V0, Vrows, Srows, Vcols);
         if (chosen >= Srows)
-            return 0;
+            break;
         if (V0 != chosen) {
             TMPSWAP(u32, uv_A(W->d, V0), uv_A(W->d, chosen));
             TMPSWAP(u32, uv_A(W->di, uv_A(W->d, V0)), uv_A(W->di, uv_A(W->d, chosen)));
@@ -185,8 +185,7 @@ static int precode_matrix_precond(params *P, pc *W)
         u += r - 1;
     }
     W->i = i;
-    W->u = u;
-    return 1;
+    W->u = P->L - i;
 }
 
 static void precode_matrix_fwd_GE(pc *W, u32 s, u32 e)
@@ -361,12 +360,12 @@ static void precode_matrix_backsolve(params *P, pc *W)
     }
 }
 
-int precode_matrix_prepare(params *P, pc *W)
+void precode_matrix_prepare(params *P, pc *W)
 {
     precode_matrix_init_pv(W);
     precode_matrix_sort(P, W);
     precode_matrix_transpose(P, W);
-    return precode_matrix_precond(P, W);
+    precode_matrix_precond(P, W);
 }
 
 int precode_matrix_invert(params *P, pc *W)

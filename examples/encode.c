@@ -71,8 +71,7 @@ int main(int argc, char *argv[])
     calc_start = now();
     size_t prep_len = nanorq_calculate_prepare_memory(&rq);
     uint8_t *prep_mem = malloc(prep_len);
-    ok = nanorq_prepare(&rq, prep_mem, prep_len);
-    assert(ok);
+    nanorq_prepare(&rq, prep_mem, prep_len);
 
     size_t work_len = nanorq_calculate_work_memory(&rq);
     uint8_t *work_mem = malloc(work_len);

@@ -18,7 +18,7 @@ int nanorq_encoder_new(uint32_t K, uint32_t overhead, nanorq *rq);
 size_t nanorq_calculate_prepare_memory(nanorq *rq);
 
 /* prepare rq matrix for inversion */
-int nanorq_prepare(nanorq *rq, uint8_t *prep_mem, size_t pm_len);
+void nanorq_prepare(nanorq *rq, uint8_t *prep_mem, size_t pm_len);
 
 /* fetch the codebook for the given packet */
 void nanorq_get_packet_mix(nanorq *rq, u32 esi, u32_vec *mix);

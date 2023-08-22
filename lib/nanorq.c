@@ -90,11 +90,11 @@ static void assign_prepare_memory(nanorq *rq, u8 *mem, size_t len)
     W->cb.on_op = precode_matrix_on_op;
 }
 
-int nanorq_prepare(nanorq *rq, uint8_t *prep_mem, size_t pm_len)
+void nanorq_prepare(nanorq *rq, uint8_t *prep_mem, size_t pm_len)
 {
     assign_prepare_memory(rq, prep_mem, pm_len);
     precode_matrix_gen(&rq->P, &rq->W);
-    return precode_matrix_prepare(&rq->P, &rq->W);
+    precode_matrix_prepare(&rq->P, &rq->W);
 }
 
 void nanorq_get_packet_mix(nanorq *rq, u32 esi, u32_vec *mix)

@@ -55,7 +55,7 @@ typedef struct _pc {
 } pc;
 
 void precode_matrix_gen(params *P, pc *W);
-int precode_matrix_prepare(params *P, pc *W);
+void precode_matrix_prepare(params *P, pc *W);
 int precode_matrix_invert(params *P, pc *W);
 void precode_matrix_make_HDPC(params *P, pc *W);
 void precode_matrix_on_op(void *arg, u32 i, u16 j, u8 u);
