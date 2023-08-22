@@ -173,7 +173,7 @@ static void precode_matrix_update_nnz(spmat *AT, int V0, int Vcols, int r,
   }
 }
 
-static bool precode_matrix_precond(params *P, spmat *A, spmat *AT,
+static void precode_matrix_precond(params *P, spmat *A, spmat *AT,
                                    schedule *S) {
   int i = 0, u = P->P, rows = A->rows, Srows = A->rows - P->H, cols = A->cols;
   int *d = S->d, *di = S->di;
@@ -187,7 +187,7 @@ static bool precode_matrix_precond(params *P, spmat *A, spmat *AT,
     int Vrows = rows - i, Vcols = cols - i - u, V0 = i;
     int chosen = precode_matrix_choose(V0, Vrows, Srows, Vcols, S, NZT);
     if (chosen >= Srows)
-      return false;
+      break;
     if (V0 != chosen) {
       TMPSWAP(int, d[V0], d[chosen]);
       TMPSWAP(int, di[d[V0]], di[d[chosen]]);
@@ -199,7 +199,7 @@ static bool precode_matrix_precond(params *P, spmat *A, spmat *AT,
   }
   spmat_free(NZT);
   S->i = i;
-  S->u = u;
+  S->u = P->L - i;
   return true;
 }
 
@@ -353,8 +353,7 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
   precode_matrix_sort(P, A, S);
   spmat *AT = spmat_transpose(A);
 
-  if (!precode_matrix_precond(P, A, AT, S))
-    return precode_matrix_cleanup(A, AT, S, U);
+  precode_matrix_precond(P, A, AT, S);
 
   U = precode_matrix_make_U(P, A, AT, S);
   if (U == NULL)
