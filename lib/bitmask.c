@@ -58,7 +58,7 @@ size_t bitmask_gaps(bitmask *bm, size_t until) {
     gaps += __builtin_popcountll(~target);
   }
   if (until % IDXBITS) {
-    uint32_t until_mask = (1 << (until % IDXBITS)) - 1;
+    uint32_t until_mask = (1U << (until % IDXBITS)) - 1;
     uint32_t target = kv_A(*bm, idx) | ~until_mask;
     gaps += __builtin_popcountll(~target);
   }

@@ -18,7 +18,7 @@ typedef struct {
   int *type;
 } wrkmat;
 
-#define gf2row(a, r) (a->bits + (r)*a->stride)
+#define gf2row(a, r) (a->bits + (r) * a->stride)
 #define gf2el(a, i, j) ((gf2row(a, i)[(j) / 32] >> ((j) % 32)) & 1)
 
 #define wrkmat_at(w, i, j)                                                     \

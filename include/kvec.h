@@ -97,7 +97,8 @@ int main() {
   (((v).m <= (size_t)(i)                                                       \
         ? ((v).m = (v).n = (i) + 1, kv_roundup32((v).m),                       \
            (v).a = (type *)realloc((v).a, sizeof(type) * (v).m), 0)            \
-        : (v).n <= (size_t)(i) ? (v).n = (i) + 1 : 0),                         \
+    : (v).n <= (size_t)(i) ? (v).n = (i) + 1                                   \
+                           : 0),                                               \
    (v).a[(i)])
 
 #define kv_swap(type, v, i, j)                                                 \
