@@ -48,11 +48,11 @@ spmat *spmat_transpose(spmat *s) {
 unsigned spmat_nnz(spmat *s, unsigned row, unsigned start, unsigned end) {
   unsigned nz = 0;
   uint_vec rs = s->idxs[row];
-  for (unsigned it = 0; it < kv_size(rs); it++) {
-    unsigned col = kv_A(rs, it);
-    if (col >= start && col < end) {
-      nz++;
-    }
+  unsigned size = kv_size(rs);
+  unsigned *cols = rs.a;
+  for (unsigned it = 0; it < size; it++) {
+    unsigned col = cols[it];
+    nz += (col >= start && col < end);
   }
   return nz;
 }

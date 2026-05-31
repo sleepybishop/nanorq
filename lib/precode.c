@@ -21,13 +21,24 @@ static void precode_matrix_apply_op(octmat *D, schedule *S, int i) {
 }
 
 static void precode_matrix_apply_sched(octmat *D, schedule *S) {
-  for (int i = 0; i < S->marks[1]; i++)
+  int phase1_end = S->marks[0];
+  int phase2_end = S->marks[1];
+  int total_ops = kv_size(S->ops);
+
+  /* forward ge (phases 1 & 2) */
+  for (int i = 0; i < phase2_end; i++)
     precode_matrix_apply_op(D, S, i);
-  for (int i = S->marks[0]; i >= 0; i--)
+
+  /* undo phase 1 row additions */
+  for (int i = phase1_end - 1; i >= 0; i--)
     precode_matrix_apply_op(D, S, i);
-  for (int i = S->marks[1]; i < kv_size(S->ops); i++)
+
+  /* backsolve (phase 3) */
+  for (int i = phase2_end; i < total_ops; i++)
     precode_matrix_apply_op(D, S, i);
-  for (int i = 0; i <= S->marks[0]; i++)
+
+  /* reapply phase 1 row additions */
+  for (int i = 0; i < phase1_end; i++)
     precode_matrix_apply_op(D, S, i);
 }
 
@@ -102,9 +113,9 @@ static void precode_matrix_sort(params *P, spmat *A, schedule *S) {
   for (int i = 0; i < A->rows; i++)
     S->di[S->d[i]] = i;
   for (int row = 0; row < A->rows; row++) {
-    S->nz[S->d[row]] = spmat_nnz(A, S->d[row], 0, A->cols - P->P);
-    if (S->nz[S->d[row]] == 0)
-      S->nz[S->d[row]] = A->cols;
+    S->nz[row] = spmat_nnz(A, row, 0, A->cols - P->P);
+    if (S->nz[row] == 0)
+      S->nz[row] = A->cols;
   }
 }
 
@@ -256,7 +267,7 @@ static wrkmat *precode_matrix_make_U(params *P, spmat *A, spmat *AT,
   wrkmat *U = wrkmat_new(A->rows, S->u);
   precode_matrix_fill_U(U, A, AT, S);
   precode_matrix_fwd_GE(U, S, AT, 0, S->i);
-  S->marks[0] = kv_size(S->ops) - 1;
+  S->marks[0] = kv_size(S->ops);
   precode_matrix_fwd_GE(U, S, AT, S->i - 1, A->rows - P->H);
   return U;
 }
@@ -369,7 +380,7 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
       return precode_matrix_cleanup(A, AT, S, U);
     }
   }
-  S->marks[1] = kv_size(S->ops) - 1;
+  S->marks[1] = kv_size(S->ops);
   precode_matrix_backsolve(P, AT, U, S);
   precode_matrix_cleanup(A, AT, NULL, U);
 
