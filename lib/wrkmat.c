@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -68,8 +69,7 @@ void wrkmat_set(wrkmat *w, int i, int j, uint8_t b) {
   } else if (b <= 1) {
     gf2mat_set(w->GF2, i, j, b);
   } else {
-    printf("%s:%d -- unhandled set\n", __FILE__, __LINE__);
-    abort();
+    assert(0 && "unhandled set");
   }
 }
 
@@ -78,7 +78,6 @@ void wrkmat_axpy(wrkmat *w, int i, int j, int beta) {
     if (w->type[i]) {
       oaxpy(om_P(w->GF256), om_P(w->GF256), w->rowmap[i], w->rowmap[j], w->cols,
             beta);
-      gf2mat_xor(w->GF2, w->GF2, i, j);
     } else {
       gf2mat_xor(w->GF2, w->GF2, i, j);
     }
@@ -91,18 +90,26 @@ void wrkmat_axpy(wrkmat *w, int i, int j, int beta) {
       oaxpy_b32(om_P(w->GF256), tmp, w->rowmap[i], w->cols, beta);
     } else {
       if (w->blkidx >= w->GF256.rows) {
-        printf("%s:%d -- unhandled axpy into gf2 row %d from gf256 row %d with "
-               "beta %d\n",
-               __FILE__, __LINE__, i, j, beta);
-        abort();
+        int new_rows = w->GF256.rows * 2;
+        if (new_rows == 0)
+          new_rows = 16;
+        octmat new_mat;
+        om_resize(&new_mat, new_rows, w->GF256.cols);
+        memcpy(new_mat.data, w->GF256.data, w->GF256.rows * w->GF256.cols_al);
+        om_destroy(&w->GF256);
+        w->GF256 = new_mat;
       }
       uint8_t *tmp = om_R(w->GF256, w->blkidx);
-      gf2mat_fill(w->GF2, i, tmp);
+      memcpy(tmp, om_R(w->GF256, w->rowmap[j]), w->GF256.cols_al);
+      if (beta != 1) {
+        oscal(om_P(w->GF256), w->blkidx, w->cols, beta);
+      }
+      uint32_t *bit_row = w->GF2->bits + w->GF2->stride * i;
+      oaxpy_b32(om_P(w->GF256), bit_row, w->blkidx, w->cols, 1);
+
       w->type[i] = 1; // row i is now a gf256 row
       w->rowmap[i] = w->blkidx;
       w->blkidx++;
-      oaxpy(om_P(w->GF256), om_P(w->GF256), w->rowmap[i], w->rowmap[j], w->cols,
-            beta);
     }
   }
 }
@@ -111,8 +118,6 @@ void wrkmat_scal(wrkmat *w, int i, int beta) {
   if (w->type[i]) {
     oscal(om_P(w->GF256), w->rowmap[i], w->cols, beta);
   } else {
-    printf("%s:%d -- unhandled scal row %d by beta %d ,  %d\n", __FILE__,
-           __LINE__, i, beta, OCT_INV[beta]);
-    abort();
+    assert(0 && "unhandled scal");
   }
 }
