@@ -19,9 +19,10 @@ static bool is_prime(uint16_t n) {
 }
 
 params params_init(uint16_t K) {
-  params P;
+  params P = {0};
+  unsigned i;
 
-  for (unsigned i = 0; i < K_padded_size; i++) {
+  for (i = 0; i < K_padded_size; i++) {
     if (K <= K_padded[i]) {
       P.Kprime = K_padded[i];
       P.J = J_K_padded[i];
@@ -31,6 +32,7 @@ params params_init(uint16_t K) {
       break;
     }
   }
+  assert(i < K_padded_size);
 
   P.L = P.Kprime + P.S + P.H;
   P.P = P.L - P.W;
