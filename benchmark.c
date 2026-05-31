@@ -50,8 +50,7 @@ void dump_esi(nanorq *rq, struct ioctx *myio, int sbn, uint32_t esi,
 }
 
 void dump_block(nanorq *rq, struct ioctx *myio, int sbn, symvec *packets,
-                float overhead_pct) {
-  float expected_loss = 6.0;
+                float overhead_pct, float expected_loss) {
   int num_esi = nanorq_block_symbols(rq, sbn);
   int overhead = (int)(num_esi * overhead_pct) / 100;
   int num_dropped = 0, num_rep = 0;
@@ -74,14 +73,15 @@ void dump_block(nanorq *rq, struct ioctx *myio, int sbn, symvec *packets,
 void usage(char *prog) {
   fprintf(stderr,
           "usage:\n%s <packet_size> <num_packets> <overhead_pct> "
-          "[<precalculate: (0,1)]\n",
+          "[<expected_loss>] [<precalculate: (0,1)]\n",
           prog);
   exit(1);
 }
 
 double encode(uint64_t len, size_t packet_size, size_t num_packets,
-              float overhead_pct, struct ioctx *myio, symvec *packets,
-              uint64_t *oti_common, uint32_t *oti_scheme, bool precalc) {
+              float overhead_pct, float expected_loss, struct ioctx *myio,
+              symvec *packets, uint64_t *oti_common, uint32_t *oti_scheme,
+              bool precalc) {
   nanorq *rq = nanorq_encoder_new_ex(len, packet_size, num_packets, 0, 8);
 
   if (rq == NULL) {
@@ -109,7 +109,7 @@ double encode(uint64_t len, size_t packet_size, size_t num_packets,
   }
 
   for (int sbn = 0; sbn < num_sbn; sbn++) {
-    dump_block(rq, myio, sbn, packets, overhead_pct);
+    dump_block(rq, myio, sbn, packets, overhead_pct, expected_loss);
   }
   nanorq_free(rq);
   return elapsed;
@@ -169,7 +169,8 @@ void clear_packets(symvec *packets) {
   kv_init(*packets);
 }
 
-int run(size_t num_packets, size_t packet_size, float overhead_pct) {
+int run(size_t num_packets, size_t packet_size, float overhead_pct,
+        float expected_loss) {
   double elapsed[4] = {0.0, 0.0, 0.0, 0.0};
   uint64_t oti_common = 0;
   uint32_t oti_scheme = 0;
@@ -200,19 +201,19 @@ int run(size_t num_packets, size_t packet_size, float overhead_pct) {
   kv_init(packets);
 
   // encode
-  elapsed[0] = encode(sz, packet_size, num_packets, 0, myio_in, &packets,
-                      &oti_common, &oti_scheme, false);
+  elapsed[0] = encode(sz, packet_size, num_packets, 0, expected_loss, myio_in,
+                      &packets, &oti_common, &oti_scheme, false);
 
   elapsed[2] = decode(oti_common, oti_scheme, myio_out, &packets);
 
   clear_packets(&packets);
 
-  elapsed[1] = encode(sz, packet_size, num_packets, 0, myio_in, &packets,
-                      &oti_common, &oti_scheme, true);
+  elapsed[1] = encode(sz, packet_size, num_packets, 0, expected_loss, myio_in,
+                      &packets, &oti_common, &oti_scheme, true);
 
   clear_packets(&packets);
-  elapsed[3] = encode(sz, packet_size, num_packets, overhead_pct, myio_in,
-                      &packets, &oti_common, &oti_scheme, false);
+  elapsed[3] = encode(sz, packet_size, num_packets, overhead_pct, expected_loss,
+                      myio_in, &packets, &oti_common, &oti_scheme, false);
 
   elapsed[3] = decode(oti_common, oti_scheme, myio_out, &packets);
 
@@ -252,7 +253,10 @@ int main(int argc, char *argv[]) {
   size_t packet_size = strtol(argv[1], NULL, 10); // T
   size_t num_packets = strtol(argv[2], NULL, 10); // K
   float overhead_pct = strtof(argv[3], NULL);     // overhead pct
-  run(num_packets, packet_size, overhead_pct);
+  float expected_loss = 6.0;
+  if (argc >= 5)
+    expected_loss = strtof(argv[4], NULL);
+  run(num_packets, packet_size, overhead_pct, expected_loss);
 
   return 0;
 }

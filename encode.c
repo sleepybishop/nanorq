@@ -24,9 +24,8 @@ void dump_esi(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn,
   }
 }
 
-void dump_block(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn) {
-  float expected_loss = 6.0;
-  int overhead = 5;
+void dump_block(nanorq *rq, struct ioctx *myio, FILE *oh, uint8_t sbn,
+                float expected_loss, int overhead) {
 
   uint32_t num_esi = nanorq_block_symbols(rq, sbn);
   int num_dropped = 0, num_rep = 0;
@@ -58,6 +57,12 @@ int main(int argc, char *argv[]) {
     usage(argv[0]);
 
   char *infile = argv[1];
+  float expected_loss = 6.0;
+  int overhead = 5;
+  if (argc >= 4)
+    expected_loss = atof(argv[3]);
+  if (argc >= 5)
+    overhead = atoi(argv[4]);
   struct ioctx *myio = ioctx_from_file(infile, 1);
   if (!myio) {
     fprintf(stdout, "couldnt access file %s\n", infile);
@@ -89,8 +94,8 @@ int main(int argc, char *argv[]) {
   FILE *oh = fopen("data.rq", "w+");
   fwrite(&oti_common, 1, sizeof(oti_common), oh);
   fwrite(&oti_scheme, 1, sizeof(oti_scheme), oh);
-  for (int sbn = 0; sbn < num_sbn; sbn++) {
-    dump_block(rq, myio, oh, sbn);
+  for (int b = 0; b < num_sbn; b++) {
+    dump_block(rq, myio, oh, b, expected_loss, overhead);
   }
   fclose(oh);
 
