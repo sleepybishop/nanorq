@@ -36,8 +36,8 @@ static const uint16_t K_padded[] = {
 #define K_max 56403
 
 /* max l = 58233. pc_rows_max adds overhead for safety-critical static arrays. */
-#define L_max        58233u
-#define PC_ROWS_MAX  58333u  /* l_max + 100 overhead */
+#define L_max 58233u
+#define PC_ROWS_MAX 58333u /* l_max + 100 overhead */
 
 static const uint16_t K_padded_size = sizeof(K_padded) / sizeof(K_padded[0]);
 

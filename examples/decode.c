@@ -76,18 +76,20 @@ int main(int argc, char *argv[])
     calc_start = now();
     size_t prep_len = nanorq_calculate_prepare_memory(&rq);
     uint8_t *prep_mem = malloc(prep_len);
-    if (!nanorq_prepare(&rq, prep_mem, prep_len)) errx(1, "OOM prepare");
+    if (!nanorq_prepare(&rq, prep_mem, prep_len))
+        errx(1, "OOM prepare");
 
     size_t work_len = nanorq_calculate_work_memory(&rq);
     uint8_t *work_mem = malloc(work_len);
     nanorq_set_op_callback(&rq, &S_enc, ops_push);
-    if (!nanorq_precalculate(&rq, work_mem, work_len)) errx(EXIT_FAILURE, "encoder precalculate failed\n");
+    if (!nanorq_precalculate(&rq, work_mem, work_len))
+        errx(EXIT_FAILURE, "encoder precalculate failed\n");
 
     u32 rows = nanorq_get_pc_rows(&rq);
     u32 SH = nanorq_get_pc_genc_offset(&rq);
     uint32_t stride = nanorq_recommended_stride(T);
     u32 mem = rows * stride;
-    
+
     D = obl_alloc(rows, stride, nanorq_oblas.align_size);
     prepare_data_mat(D, argv[4], rows, T, K, SH, stride);
 
@@ -102,7 +104,8 @@ int main(int argc, char *argv[])
     }
 
     u8 *orig_pkts = NULL;
-    if (drops > 0) orig_pkts = calloc(drops, (size_t)stride);
+    if (drops > 0)
+        orig_pkts = calloc(drops, (size_t)stride);
     for (u32 rp = 0; rp < drops; rp++) {
         u8 *src = (D + (SH + rp) * stride);
         for (u32 i = 0; i < PAD(T); i++) {
@@ -115,15 +118,16 @@ int main(int argc, char *argv[])
 
     /* save repair packets */
     u8 *repair_pkts = NULL;
-    if (drops > 0) repair_pkts = calloc(drops, (size_t)stride);
+    if (drops > 0)
+        repair_pkts = calloc(drops, (size_t)stride);
     for (u32 rp = 0; rp < drops; rp++) {
         ops_mix(&rq, D, stride, K + rp, repair_pkts + rp * stride);
     }
 
-
     calc_start = now();
     /* prepare fresh decoder matrix */
-    if (!nanorq_prepare(&rq, prep_mem, prep_len)) errx(1, "OOM prepare");
+    if (!nanorq_prepare(&rq, prep_mem, prep_len))
+        errx(1, "OOM prepare");
 
     /* simulate drop and substitute repair data */
     for (u32 rp = 0; rp < drops; rp++) {
@@ -143,7 +147,8 @@ int main(int argc, char *argv[])
     work_mem = malloc(work_len);
 
     nanorq_set_op_callback(&rq, &S_dec, ops_push);
-    if (!nanorq_precalculate(&rq, work_mem, work_len)) errx(EXIT_FAILURE, "decoder precalculate failed\n");
+    if (!nanorq_precalculate(&rq, work_mem, work_len))
+        errx(EXIT_FAILURE, "decoder precalculate failed\n");
     calc_end = now();
 
     /* restore d matrix before decoding */
@@ -176,7 +181,6 @@ int main(int argc, char *argv[])
                 diffs++;
             }
         }
-
     }
     free(reppkt);
 
@@ -193,8 +197,10 @@ int main(int argc, char *argv[])
     free(prep_mem);
     free(work_mem);
     free(D);
-    if (orig_pkts) free(orig_pkts);
-    if (repair_pkts) free(repair_pkts);
+    if (orig_pkts)
+        free(orig_pkts);
+    if (repair_pkts)
+        free(repair_pkts);
     free(S_enc.ops.a);
     free(S_dec.ops.a);
 

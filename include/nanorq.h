@@ -43,11 +43,10 @@ uint32_t nanorq_recommended_stride(uint32_t T);
 struct nanorq_mem_reqs {
     size_t prepare_bytes;
     size_t work_bytes;
-    size_t matrix_bytes;   /* rows * stride */
+    size_t matrix_bytes; /* rows * stride */
     size_t schedule_bytes;
 };
-void nanorq_get_memory_reqs(uint32_t K, uint32_t overhead, uint32_t stride,
-                             struct nanorq_mem_reqs *reqs);
+void nanorq_get_memory_reqs(uint32_t K, uint32_t overhead, uint32_t stride, struct nanorq_mem_reqs *reqs);
 
 /* d matrix must be zero-initialised. use nanorq_init_matrix for arenas/static buffers. */
 
@@ -102,12 +101,11 @@ inline void nanorq_clone_pc_cols_pv(nanorq *rq, uint32_t *pv)
         pv[i] = uv_A(rq->W.c, i);
 }
 
-
 /* returns pointer to slot in d matrix for symbol row. */
-static inline uint8_t *nanorq_get_symbol_ptr(nanorq *rq, uint8_t *D, uint32_t stride, uint32_t row) {
+static inline uint8_t *nanorq_get_symbol_ptr(nanorq *rq, uint8_t *D, uint32_t stride, uint32_t row)
+{
     uint32_t SH = nanorq_get_pc_genc_offset(rq);
     return D + (SH + row) * stride;
 }
 
 #endif
-

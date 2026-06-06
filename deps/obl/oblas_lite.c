@@ -103,136 +103,135 @@ static void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 
 #define OBL_NOOP(a, b) (b)
 
-#define OBL_SHUF_TEMPLATE(op, a, b, f, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR) \
-    do { \
-        VEC_INIT(); \
-        VEC_TYPE *ap = (VEC_TYPE *)a; \
-        VEC_TYPE *ae = (VEC_TYPE *)(a + k - (k % (4 * sizeof(VEC_TYPE)))); \
-        const VEC_TYPE *bp = (const VEC_TYPE *)b; \
-        for (; ap < ae; ap += 4, bp += 4) { \
-            VEC_TYPE bx0 = VEC_LOAD(bp + 0); \
-            VEC_TYPE bx1 = VEC_LOAD(bp + 1); \
-            VEC_TYPE bx2 = VEC_LOAD(bp + 2); \
-            VEC_TYPE bx3 = VEC_LOAD(bp + 3); \
-            VEC_CORE(bx0, prod0); \
-            VEC_CORE(bx1, prod1); \
-            VEC_CORE(bx2, prod2); \
-            VEC_CORE(bx3, prod3); \
-            VEC_STORE(ap + 0, f(VEC_LOAD(ap + 0), prod0)); \
-            VEC_STORE(ap + 1, f(VEC_LOAD(ap + 1), prod1)); \
-            VEC_STORE(ap + 2, f(VEC_LOAD(ap + 2), prod2)); \
-            VEC_STORE(ap + 3, f(VEC_LOAD(ap + 3), prod3)); \
-        } \
-        VEC_TYPE *ae2 = (VEC_TYPE *)(a + k - (k % sizeof(VEC_TYPE))); \
-        for (; ap < ae2; ap++, bp++) { \
-            VEC_TYPE bx = VEC_LOAD(bp); \
-            VEC_CORE(bx, prod); \
-            VEC_STORE(ap, f(VEC_LOAD(ap), prod)); \
-        } \
-        op##_ref((u8 *)ap, (u8 *)bp, u, k % sizeof(VEC_TYPE)); \
+#define OBL_SHUF_TEMPLATE(op, a, b, f, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR)                                 \
+    do {                                                                                                                           \
+        VEC_INIT();                                                                                                                \
+        VEC_TYPE *ap = (VEC_TYPE *)a;                                                                                              \
+        VEC_TYPE *ae = (VEC_TYPE *)(a + k - (k % (4 * sizeof(VEC_TYPE))));                                                         \
+        const VEC_TYPE *bp = (const VEC_TYPE *)b;                                                                                  \
+        for (; ap < ae; ap += 4, bp += 4) {                                                                                        \
+            VEC_TYPE bx0 = VEC_LOAD(bp + 0);                                                                                       \
+            VEC_TYPE bx1 = VEC_LOAD(bp + 1);                                                                                       \
+            VEC_TYPE bx2 = VEC_LOAD(bp + 2);                                                                                       \
+            VEC_TYPE bx3 = VEC_LOAD(bp + 3);                                                                                       \
+            VEC_CORE(bx0, prod0);                                                                                                  \
+            VEC_CORE(bx1, prod1);                                                                                                  \
+            VEC_CORE(bx2, prod2);                                                                                                  \
+            VEC_CORE(bx3, prod3);                                                                                                  \
+            VEC_STORE(ap + 0, f(VEC_LOAD(ap + 0), prod0));                                                                         \
+            VEC_STORE(ap + 1, f(VEC_LOAD(ap + 1), prod1));                                                                         \
+            VEC_STORE(ap + 2, f(VEC_LOAD(ap + 2), prod2));                                                                         \
+            VEC_STORE(ap + 3, f(VEC_LOAD(ap + 3), prod3));                                                                         \
+        }                                                                                                                          \
+        VEC_TYPE *ae2 = (VEC_TYPE *)(a + k - (k % sizeof(VEC_TYPE)));                                                              \
+        for (; ap < ae2; ap++, bp++) {                                                                                             \
+            VEC_TYPE bx = VEC_LOAD(bp);                                                                                            \
+            VEC_CORE(bx, prod);                                                                                                    \
+            VEC_STORE(ap, f(VEC_LOAD(ap), prod));                                                                                  \
+        }                                                                                                                          \
+        op##_ref((u8 *)ap, (u8 *)bp, u, k % sizeof(VEC_TYPE));                                                                     \
     } while (0)
 
-#define GENERATE_IMPL(suffix, attr, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR) \
-attr \
-static void obl_axpy_##suffix(u8 *a, u8 *b, u8 u, unsigned k) { \
-    if (u == 1) { \
-        u8 *ap = a; \
-        u8 *ae = a + k; \
-        const u8 *bp = b; \
-        for (; ap < ae; ap++, bp++) \
-            *ap ^= *bp; \
-    } else { \
-        OBL_SHUF_TEMPLATE(obl_axpy, a, b, VEC_XOR, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR); \
-    } \
-} \
-attr \
-static void obl_scal_##suffix(u8 *a, u8 u, unsigned k) { \
-    OBL_SHUF_TEMPLATE(obl_scal, a, a, OBL_NOOP, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR); \
-} \
-attr \
-static void obl_axiy_##suffix(u8 *a, u8 *b, u8 u, unsigned k) { \
-    OBL_SHUF_TEMPLATE(obl_axiy, a, b, OBL_NOOP, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR); \
-}
+#define GENERATE_IMPL(suffix, attr, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR)                                    \
+    attr static void obl_axpy_##suffix(u8 *a, u8 *b, u8 u, unsigned k)                                                             \
+    {                                                                                                                              \
+        if (u == 1) {                                                                                                              \
+            u8 *ap = a;                                                                                                            \
+            u8 *ae = a + k;                                                                                                        \
+            const u8 *bp = b;                                                                                                      \
+            for (; ap < ae; ap++, bp++)                                                                                            \
+                *ap ^= *bp;                                                                                                        \
+        } else {                                                                                                                   \
+            OBL_SHUF_TEMPLATE(obl_axpy, a, b, VEC_XOR, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR);                \
+        }                                                                                                                          \
+    }                                                                                                                              \
+    attr static void obl_scal_##suffix(u8 *a, u8 u, unsigned k)                                                                    \
+    {                                                                                                                              \
+        OBL_SHUF_TEMPLATE(obl_scal, a, a, OBL_NOOP, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR);                   \
+    }                                                                                                                              \
+    attr static void obl_axiy_##suffix(u8 *a, u8 *b, u8 u, unsigned k)                                                             \
+    {                                                                                                                              \
+        OBL_SHUF_TEMPLATE(obl_axiy, a, b, OBL_NOOP, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR);                   \
+    }
 
 #if defined(OBLAS_ARCH_X86)
 
-/* avx512 gfni */ 
+/* avx512 gfni */
 #define VEC_INIT_avx512_gfni() const __m512i u_mat = _mm512_set1_epi64(GF2_8_AFFINE_MAT[u])
 #define VEC_CORE_avx512_gfni(bx, res) __m512i res = _mm512_gf2p8affine_epi64_epi8(bx, u_mat, 0)
-GENERATE_IMPL(avx512_gfni, __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl,gfni"))),
-              __m512i, _mm512_loadu_si512, _mm512_storeu_si512, VEC_INIT_avx512_gfni, VEC_CORE_avx512_gfni, _mm512_xor_si512)
+GENERATE_IMPL(avx512_gfni, __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl,gfni"))), __m512i, _mm512_loadu_si512,
+              _mm512_storeu_si512, VEC_INIT_avx512_gfni, VEC_CORE_avx512_gfni, _mm512_xor_si512)
 
 /* avx-512 */
-#define VEC_INIT_avx512_std() \
-    const u8 *u_lo = GF2_8_SHUF_LO + u * 16; \
-    const u8 *u_hi = GF2_8_SHUF_HI + u * 16; \
-    const __m512i mask = _mm512_set1_epi8(0x0f); \
-    const __m512i urow_lo = _mm512_broadcast_i32x4(_mm_loadu_si128((const __m128i *)u_lo)); \
+#define VEC_INIT_avx512_std()                                                                                                      \
+    const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                       \
+    const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                                                                       \
+    const __m512i mask = _mm512_set1_epi8(0x0f);                                                                                   \
+    const __m512i urow_lo = _mm512_broadcast_i32x4(_mm_loadu_si128((const __m128i *)u_lo));                                        \
     const __m512i urow_hi = _mm512_broadcast_i32x4(_mm_loadu_si128((const __m128i *)u_hi))
-#define VEC_CORE_avx512_std(bx, res) \
-    __m512i lo_##res = _mm512_and_si512(bx, mask); \
-    __m512i hi_##res = _mm512_and_si512(_mm512_srli_epi64(bx, 4), mask); \
-    lo_##res = _mm512_shuffle_epi8(urow_lo, lo_##res); \
-    hi_##res = _mm512_shuffle_epi8(urow_hi, hi_##res); \
+#define VEC_CORE_avx512_std(bx, res)                                                                                               \
+    __m512i lo_##res = _mm512_and_si512(bx, mask);                                                                                 \
+    __m512i hi_##res = _mm512_and_si512(_mm512_srli_epi64(bx, 4), mask);                                                           \
+    lo_##res = _mm512_shuffle_epi8(urow_lo, lo_##res);                                                                             \
+    hi_##res = _mm512_shuffle_epi8(urow_hi, hi_##res);                                                                             \
     __m512i res = _mm512_xor_si512(lo_##res, hi_##res)
-GENERATE_IMPL(avx512_std, __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))),
-              __m512i, _mm512_loadu_si512, _mm512_storeu_si512, VEC_INIT_avx512_std, VEC_CORE_avx512_std, _mm512_xor_si512)
+GENERATE_IMPL(avx512_std, __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))), __m512i, _mm512_loadu_si512,
+              _mm512_storeu_si512, VEC_INIT_avx512_std, VEC_CORE_avx512_std, _mm512_xor_si512)
 
 /* avx2 gnfi */
 #define VEC_INIT_avx2_gfni() const __m256i u_mat = _mm256_set1_epi64x(GF2_8_AFFINE_MAT[u])
 #define VEC_CORE_avx2_gfni(bx, res) __m256i res = _mm256_gf2p8affine_epi64_epi8(bx, u_mat, 0)
-GENERATE_IMPL(avx2_gfni, __attribute__((target("avx2,gfni"))),
-              __m256i, _mm256_loadu_si256, _mm256_storeu_si256, VEC_INIT_avx2_gfni, VEC_CORE_avx2_gfni, _mm256_xor_si256)
+GENERATE_IMPL(avx2_gfni, __attribute__((target("avx2,gfni"))), __m256i, _mm256_loadu_si256, _mm256_storeu_si256, VEC_INIT_avx2_gfni,
+              VEC_CORE_avx2_gfni, _mm256_xor_si256)
 
 /* avx2 */
-#define VEC_INIT_avx2_std() \
-    const u8 *u_lo = GF2_8_SHUF_LO + u * 16; \
-    const u8 *u_hi = GF2_8_SHUF_HI + u * 16; \
-    const __m256i mask = _mm256_set1_epi8(0x0f); \
-    const __m256i urow_lo = _mm256_loadu2_m128i((const __m128i *)u_lo, (const __m128i *)u_lo); \
+#define VEC_INIT_avx2_std()                                                                                                        \
+    const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                       \
+    const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                                                                       \
+    const __m256i mask = _mm256_set1_epi8(0x0f);                                                                                   \
+    const __m256i urow_lo = _mm256_loadu2_m128i((const __m128i *)u_lo, (const __m128i *)u_lo);                                     \
     const __m256i urow_hi = _mm256_loadu2_m128i((const __m128i *)u_hi, (const __m128i *)u_hi)
-#define VEC_CORE_avx2_std(bx, res) \
-    __m256i lo_##res = _mm256_and_si256(bx, mask); \
-    __m256i hi_##res = _mm256_and_si256(_mm256_srli_epi64(bx, 4), mask); \
-    lo_##res = _mm256_shuffle_epi8(urow_lo, lo_##res); \
-    hi_##res = _mm256_shuffle_epi8(urow_hi, hi_##res); \
+#define VEC_CORE_avx2_std(bx, res)                                                                                                 \
+    __m256i lo_##res = _mm256_and_si256(bx, mask);                                                                                 \
+    __m256i hi_##res = _mm256_and_si256(_mm256_srli_epi64(bx, 4), mask);                                                           \
+    lo_##res = _mm256_shuffle_epi8(urow_lo, lo_##res);                                                                             \
+    hi_##res = _mm256_shuffle_epi8(urow_hi, hi_##res);                                                                             \
     __m256i res = _mm256_xor_si256(lo_##res, hi_##res)
-GENERATE_IMPL(avx2_std, __attribute__((target("avx2"))),
-              __m256i, _mm256_loadu_si256, _mm256_storeu_si256, VEC_INIT_avx2_std, VEC_CORE_avx2_std, _mm256_xor_si256)
+GENERATE_IMPL(avx2_std, __attribute__((target("avx2"))), __m256i, _mm256_loadu_si256, _mm256_storeu_si256, VEC_INIT_avx2_std,
+              VEC_CORE_avx2_std, _mm256_xor_si256)
 
 /* sse3 gfni */
 #define VEC_INIT_ssse3_gfni() const __m128i u_mat = _mm_set1_epi64x(GF2_8_AFFINE_MAT[u])
 #define VEC_CORE_ssse3_gfni(bx, res) __m128i res = _mm_gf2p8affine_epi64_epi8(bx, u_mat, 0)
-GENERATE_IMPL(ssse3_gfni, __attribute__((target("ssse3,gfni"))),
-              __m128i, _mm_loadu_si128, _mm_storeu_si128, VEC_INIT_ssse3_gfni, VEC_CORE_ssse3_gfni, _mm_xor_si128)
+GENERATE_IMPL(ssse3_gfni, __attribute__((target("ssse3,gfni"))), __m128i, _mm_loadu_si128, _mm_storeu_si128, VEC_INIT_ssse3_gfni,
+              VEC_CORE_ssse3_gfni, _mm_xor_si128)
 
 /* sse3 */
-#define VEC_INIT_ssse3_std() \
-    const u8 *u_lo = GF2_8_SHUF_LO + u * 16; \
-    const u8 *u_hi = GF2_8_SHUF_HI + u * 16; \
-    const __m128i mask = _mm_set1_epi8(0x0f); \
-    const __m128i urow_lo = _mm_loadu_si128((const __m128i *)u_lo); \
+#define VEC_INIT_ssse3_std()                                                                                                       \
+    const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                       \
+    const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                                                                       \
+    const __m128i mask = _mm_set1_epi8(0x0f);                                                                                      \
+    const __m128i urow_lo = _mm_loadu_si128((const __m128i *)u_lo);                                                                \
     const __m128i urow_hi = _mm_loadu_si128((const __m128i *)u_hi)
-#define VEC_CORE_ssse3_std(bx, res) \
-    __m128i lo_##res = _mm_and_si128(bx, mask); \
-    __m128i hi_##res = _mm_and_si128(_mm_srli_epi64(bx, 4), mask); \
-    lo_##res = _mm_shuffle_epi8(urow_lo, lo_##res); \
-    hi_##res = _mm_shuffle_epi8(urow_hi, hi_##res); \
+#define VEC_CORE_ssse3_std(bx, res)                                                                                                \
+    __m128i lo_##res = _mm_and_si128(bx, mask);                                                                                    \
+    __m128i hi_##res = _mm_and_si128(_mm_srli_epi64(bx, 4), mask);                                                                 \
+    lo_##res = _mm_shuffle_epi8(urow_lo, lo_##res);                                                                                \
+    hi_##res = _mm_shuffle_epi8(urow_hi, hi_##res);                                                                                \
     __m128i res = _mm_xor_si128(lo_##res, hi_##res)
-GENERATE_IMPL(ssse3_std, __attribute__((target("ssse3"))),
-              __m128i, _mm_loadu_si128, _mm_storeu_si128, VEC_INIT_ssse3_std, VEC_CORE_ssse3_std, _mm_xor_si128)
+GENERATE_IMPL(ssse3_std, __attribute__((target("ssse3"))), __m128i, _mm_loadu_si128, _mm_storeu_si128, VEC_INIT_ssse3_std,
+              VEC_CORE_ssse3_std, _mm_xor_si128)
 
-__attribute__((target("avx512f,avx512bw,avx512dq,avx512vl")))
-static void obl_axpyb32_avx512(u8 *a, u32 *b, u8 u, unsigned k)
+__attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))) static void obl_axpyb32_avx512(u8 *a, u32 *b, u8 u, unsigned k)
 {
     __m512i *ap = (__m512i *)a;
     __m512i *ae = (__m512i *)(a + (k & ~63));
     __m512i scatter =
-        _mm512_set_epi32(0x03030303, 0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000,
-                         0x03030303, 0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000);
+        _mm512_set_epi32(0x03030303, 0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000, 0x03030303,
+                         0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000);
     __m512i cmpmask =
-        _mm512_set_epi32(0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201,
-                         0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201);
+        _mm512_set_epi32(0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010,
+                         0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201);
     __m512i up = _mm512_set1_epi8(u);
     unsigned p = 0;
     for (; ap < ae; p += 2, ap++) {
@@ -246,8 +245,7 @@ static void obl_axpyb32_avx512(u8 *a, u32 *b, u8 u, unsigned k)
     obl_axpyb32_ref((u8 *)ap, b + p, u, k & 63);
 }
 
-__attribute__((target("avx2")))
-static void obl_axpyb32_avx2(u8 *a, u32 *b, u8 u, unsigned k)
+__attribute__((target("avx2"))) static void obl_axpyb32_avx2(u8 *a, u32 *b, u8 u, unsigned k)
 {
     __m256i *ap = (__m256i *)a;
     __m256i *ae = (__m256i *)(a + (k & ~31));
@@ -267,8 +265,7 @@ static void obl_axpyb32_avx2(u8 *a, u32 *b, u8 u, unsigned k)
     obl_axpyb32_ref((u8 *)ap, b + p, u, k & 31);
 }
 
-__attribute__((target("ssse3")))
-static void obl_axpyb32_ssse3(u8 *a, u32 *b, u8 u, unsigned k)
+__attribute__((target("ssse3"))) static void obl_axpyb32_ssse3(u8 *a, u32 *b, u8 u, unsigned k)
 {
     __m128i *ap = (__m128i *)a;
     __m128i *ae = (__m128i *)(a + (k & ~31));
@@ -297,17 +294,17 @@ static void obl_axpyb32_ssse3(u8 *a, u32 *b, u8 u, unsigned k)
 #if defined(OBLAS_ARCH_ARM) && defined(__ARM_NEON)
 #include <arm_neon.h>
 
-#define VEC_INIT_neon() \
-    const u8 *u_lo = GF2_8_SHUF_LO + u * 16; \
-    const u8 *u_hi = GF2_8_SHUF_HI + u * 16; \
-    const uint8x16_t mask = vdupq_n_u8(0x0f); \
-    const uint8x16_t urow_lo = vld1q_u8(u_lo); \
+#define VEC_INIT_neon()                                                                                                            \
+    const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                       \
+    const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                                                                       \
+    const uint8x16_t mask = vdupq_n_u8(0x0f);                                                                                      \
+    const uint8x16_t urow_lo = vld1q_u8(u_lo);                                                                                     \
     const uint8x16_t urow_hi = vld1q_u8(u_hi)
-#define VEC_CORE_neon(bx, res) \
-    uint8x16_t lo_##res = vandq_u8(bx, mask); \
-    uint8x16_t hi_##res = vshrq_n_u8(bx, 4); \
-    lo_##res = vqtbl1q_u8(urow_lo, lo_##res); \
-    hi_##res = vqtbl1q_u8(urow_hi, hi_##res); \
+#define VEC_CORE_neon(bx, res)                                                                                                     \
+    uint8x16_t lo_##res = vandq_u8(bx, mask);                                                                                      \
+    uint8x16_t hi_##res = vshrq_n_u8(bx, 4);                                                                                       \
+    lo_##res = vqtbl1q_u8(urow_lo, lo_##res);                                                                                      \
+    hi_##res = vqtbl1q_u8(urow_hi, hi_##res);                                                                                      \
     uint8x16_t res = veorq_u8(lo_##res, hi_##res)
 GENERATE_IMPL(neon, , uint8x16_t, vld1q_u8, vst1q_u8, VEC_INIT_neon, VEC_CORE_neon, veorq_u8)
 
@@ -457,4 +454,3 @@ void obl_free(void *ptr)
 }
 
 #endif /* NANORQ_NO_LIBC */
-

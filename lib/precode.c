@@ -79,7 +79,8 @@ static bool precode_matrix_transpose(params *P, pc *W)
         uv_A(W->nz, row) = nz;
     }
     arena *a = &W->prep_mem;
-    if (!W->AT_mem_beg) W->AT_mem_beg = a->beg;
+    if (!W->AT_mem_beg)
+        W->AT_mem_beg = a->beg;
     a->beg = W->AT_mem_beg;
     for (u32 row = 0; row < W->cols; row++) {
         if (!u32_vec_init(&W->AT[row], a, 0, uv_A(W->cnz, row), 0))

@@ -12,13 +12,15 @@
 
 #define TEST_BYTES 256 * 1024 * 1024
 
-uint64_t usecs() {
+uint64_t usecs()
+{
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (tv.tv_sec * (uint64_t)1000000 + tv.tv_usec);
 }
 
-void usage(char *prog) {
+void usage(char *prog)
+{
     fprintf(stderr,
             "usage:\n%s <packet_size> <num_packets> <overhead_pct> "
             "[<expected_loss>]\n",
@@ -26,14 +28,15 @@ void usage(char *prog) {
     exit(1);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     if (argc < 4)
         usage(argv[0]);
 
     srand((unsigned int)time(0));
 
-    size_t T = strtol(argv[1], NULL, 10); /* packet size */
-    size_t K = strtol(argv[2], NULL, 10); /* num packets */
+    size_t T = strtol(argv[1], NULL, 10);       /* packet size */
+    size_t K = strtol(argv[2], NULL, 10);       /* num packets */
     float overhead_pct = strtof(argv[3], NULL); /* overhead pct */
     float expected_loss = 6.0;
     if (argc >= 5)
@@ -133,7 +136,8 @@ int main(int argc, char *argv[]) {
     ops_run(&rq, D, stride, &S_enc);
 
     int drops = (int)(K * expected_loss / 100.0);
-    if (drops <= 0) drops = 1;
+    if (drops <= 0)
+        drops = 1;
 
     u32 *dropped_esi = malloc(sizeof(u32) * drops);
     for (u32 rp = 0; rp < (u32)drops; rp++) {
@@ -217,17 +221,19 @@ int main(int argc, char *argv[]) {
     double elapsed_decode = (usecs() - t0) / 1000000.0;
 
     if (K == 50000 && 0) {
-        fprintf(stderr, "\n[K=50000 decode Breakdown] prep: %.4fs, precalc: %.4fs, ops_run: %.4fs, ops_mix: %.4fs\n",
-                t_prep_dec, t_precalc_dec, t_ops_run_dec, t_ops_mix_dec);
+        fprintf(stderr, "\n[K=50000 decode Breakdown] prep: %.4fs, precalc: %.4fs, ops_run: %.4fs, ops_mix: %.4fs\n", t_prep_dec,
+                t_precalc_dec, t_ops_run_dec, t_ops_mix_dec);
     }
 
     for (u32 rp = 0; rp < (u32)drops; rp++) {
         if (memcmp(decoded_pkts + rp * stride, orig_pkts + rp * stride, T) != 0) {
             fprintf(stderr, "verification failed for drop %u!\n", rp);
             fprintf(stderr, "Expected: ");
-            for (u32 i = 0; i < 16 && i < T; i++) fprintf(stderr, "%02x ", orig_pkts[rp * stride + i]);
+            for (u32 i = 0; i < 16 && i < T; i++)
+                fprintf(stderr, "%02x ", orig_pkts[rp * stride + i]);
             fprintf(stderr, "\nDecoded:  ");
-            for (u32 i = 0; i < 16 && i < T; i++) fprintf(stderr, "%02x ", decoded_pkts[rp * stride + i]);
+            for (u32 i = 0; i < 16 && i < T; i++)
+                fprintf(stderr, "%02x ", decoded_pkts[rp * stride + i]);
             fprintf(stderr, "\n");
             exit(1);
         }
@@ -235,7 +241,8 @@ int main(int argc, char *argv[]) {
 
     /* decode with extra overhead */
     int overhead = (int)(K * overhead_pct) / 100;
-    if (overhead <= 0) overhead = 1;
+    if (overhead <= 0)
+        overhead = 1;
 
     free(repair_pkts);
     repair_pkts = malloc((drops + overhead) * stride);
@@ -324,14 +331,20 @@ int main(int argc, char *argv[]) {
     double elapsed_decode_oh = (usecs() - t0) / 1000000.0;
 
     if (K == 50000 && 0) {
-        fprintf(stderr, "\n[K=50000 oh-5 Breakdown] prep: %.4fs, precalc: %.4fs, ops_run: %.4fs, ops_mix: %.4fs\n",
-                t_prep, t_precalc, t_ops_run, t_ops_mix);
+        fprintf(stderr, "\n[K=50000 oh-5 Breakdown] prep: %.4fs, precalc: %.4fs, ops_run: %.4fs, ops_mix: %.4fs\n", t_prep,
+                t_precalc, t_ops_run, t_ops_mix);
         size_t gf256_enc = 0, gf256_dec = 0, gf256_dec_oh = 0;
-        for (size_t i = 0; i < S_enc.ops.n; i++) if (S_enc.ops.a[i].u > 1) gf256_enc++;
-        for (size_t i = 0; i < S_dec.ops.n; i++) if (S_dec.ops.a[i].u > 1) gf256_dec++;
-        for (size_t i = 0; i < S_dec_oh.ops.n; i++) if (S_dec_oh.ops.a[i].u > 1) gf256_dec_oh++;
-        fprintf(stderr, "Schedule sizes: S_enc=%zu (GF256:%zu), S_dec=%zu (GF256:%zu), S_dec_oh=%zu (GF256:%zu)\n",
-                S_enc.ops.n, gf256_enc, S_dec.ops.n, gf256_dec, S_dec_oh.ops.n, gf256_dec_oh);
+        for (size_t i = 0; i < S_enc.ops.n; i++)
+            if (S_enc.ops.a[i].u > 1)
+                gf256_enc++;
+        for (size_t i = 0; i < S_dec.ops.n; i++)
+            if (S_dec.ops.a[i].u > 1)
+                gf256_dec++;
+        for (size_t i = 0; i < S_dec_oh.ops.n; i++)
+            if (S_dec_oh.ops.a[i].u > 1)
+                gf256_dec_oh++;
+        fprintf(stderr, "Schedule sizes: S_enc=%zu (GF256:%zu), S_dec=%zu (GF256:%zu), S_dec_oh=%zu (GF256:%zu)\n", S_enc.ops.n,
+                gf256_enc, S_dec.ops.n, gf256_dec, S_dec_oh.ops.n, gf256_dec_oh);
     }
 
     for (u32 rp = 0; rp < (u32)drops; rp++) {
@@ -341,10 +354,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    fprintf(stdout, "%10d %10.1f %10.1f %10.1f %10.1f\n", (int)K,
-            (8.0 * TEST_BYTES / (1024 * 1024 * elapsed_encode)),
-            (8.0 * TEST_BYTES / (1024 * 1024 * elapsed_precalc)),
-            (8.0 * TEST_BYTES / (1024 * 1024 * elapsed_decode)),
+    fprintf(stdout, "%10d %10.1f %10.1f %10.1f %10.1f\n", (int)K, (8.0 * TEST_BYTES / (1024 * 1024 * elapsed_encode)),
+            (8.0 * TEST_BYTES / (1024 * 1024 * elapsed_precalc)), (8.0 * TEST_BYTES / (1024 * 1024 * elapsed_decode)),
             (8.0 * TEST_BYTES / (1024 * 1024 * elapsed_decode_oh)));
 
     /* cleanup */

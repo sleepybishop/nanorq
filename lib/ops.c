@@ -47,11 +47,11 @@ static void ops_permute(uint8_t *D, uint32_t stride, u32 P[], u32 n)
     }
 }
 
-
 void ops_push(void *arg, u32 i, u16 j, u8 u)
 {
     schedule *S = (schedule *)arg;
-    if (!S || !S->ops.a) return;
+    if (!S || !S->ops.a)
+        return;
     sched_op op = {.i = i, .j = j, .u = u};
     if (i == 0 && j == 0 && u == 0) {
         if (S->cpidx < 2) {
@@ -71,9 +71,8 @@ void ops_run(nanorq *rq, uint8_t *D, uint32_t stride, schedule *S)
     u32 cols = nanorq_get_pc_cols(rq);
     /* permute using arena-backed pivot vectors, marking visited entries in-place. */
     ops_permute(D, stride, rq->W.di.a, rows);
-    ops_permute(D, stride, rq->W.c.a,  cols);
+    ops_permute(D, stride, rq->W.c.a, cols);
 }
-
 
 void ops_mix(nanorq *rq, uint8_t *D, uint32_t stride, u32 esi, u8 *ptr)
 {
@@ -97,7 +96,8 @@ size_t ops_estimate_schedule_bytes(uint32_t K)
 
 bool schedule_init(schedule *S, void *buf, size_t buf_bytes)
 {
-    if (!buf || buf_bytes < sizeof(sched_op)) return false;
+    if (!buf || buf_bytes < sizeof(sched_op))
+        return false;
     *S = (schedule){0};
     S->ops.a = (sched_op *)buf;
     S->ops.m = buf_bytes / sizeof(sched_op);
@@ -110,7 +110,8 @@ bool schedule_init(schedule *S, void *buf, size_t buf_bytes)
 #include <stdlib.h>
 #endif
 
-void nanorq_get_memory_reqs(uint32_t K, uint32_t overhead, uint32_t stride, struct nanorq_mem_reqs *reqs) {
+void nanorq_get_memory_reqs(uint32_t K, uint32_t overhead, uint32_t stride, struct nanorq_mem_reqs *reqs)
+{
     nanorq rq;
     nanorq_encoder_new(K, overhead, &rq);
     reqs->prepare_bytes = nanorq_calculate_prepare_memory(&rq);
@@ -171,4 +172,3 @@ bool nanorq_encode_simple(uint8_t *src_data, uint32_t K, uint16_t T, uint32_t nu
 }
 
 #endif /* NANORQ_NO_LIBC */
-

@@ -75,12 +75,14 @@ int main(int argc, char *argv[])
     calc_start = now();
     size_t prep_len = nanorq_calculate_prepare_memory(&rq);
     uint8_t *prep_mem = malloc(prep_len);
-    if (!nanorq_prepare(&rq, prep_mem, prep_len)) errx(1, "OOM prepare");
+    if (!nanorq_prepare(&rq, prep_mem, prep_len))
+        errx(1, "OOM prepare");
 
     size_t work_len = nanorq_calculate_work_memory(&rq);
     uint8_t *work_mem = malloc(work_len);
     nanorq_set_op_callback(&rq, &S, ops_push);
-    if (!nanorq_precalculate(&rq, work_mem, work_len)) errx(1, "precalculate failed");
+    if (!nanorq_precalculate(&rq, work_mem, work_len))
+        errx(1, "precalculate failed");
     calc_end = now();
 
     u32 rows = nanorq_get_pc_rows(&rq);
@@ -89,11 +91,9 @@ int main(int argc, char *argv[])
     D = obl_alloc(rows, stride, nanorq_oblas.align_size);
     prepare_data_mat(D, argv[4], rows, T, K, SH, stride);
 
-
     ops_start = now();
     ops_run(&rq, D, stride, &S);
     ops_end = now();
-
 
     u8 *reppkt = malloc(stride);
     for (u32 rp = 0; rp < R; rp++) {
