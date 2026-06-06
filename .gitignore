@@ -10,4 +10,12 @@ peace_and_war.txt
 encode
 decode
 benchmark
+benchmark_core
+t/00util/matgen
+t/00util/repgen
+t/00util/hdpcgen
+t/00util/precond
+t/00util/ult
+t/00util/schedgen
+t/00util/bounds
 .DS_Store
