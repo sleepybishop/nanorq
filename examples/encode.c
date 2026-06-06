@@ -5,7 +5,7 @@
 #include <err.h>
 
 #include <nanorq.h>
-#include "operations.h"
+#include "nanorq_ops.h"
 
 #define NSECS 1000000000L
 static int64_t timespec_diff(const struct timespec *t1, const struct timespec *t0)
@@ -22,32 +22,32 @@ static struct timespec now(void)
     return ts;
 }
 
-static void prepare_data_mat(u8_vec *D, const char *f, u32 rows, u32 T, u32 K, u32 SH)
+static void prepare_data_mat(uint8_t *D, const char *f, u32 rows, u32 T, u32 K, u32 SH, u32 stride)
 {
     FILE *h = fopen(f, "r");
     if (!h)
         return;
     for (u32 row = 0; row < SH; row++)
         for (u32 col = 0; col < T; col++)
-            uv_E(*D, row, col) = 0;
+            D[row * stride + col] = 0;
     for (u32 row = SH, off = 0; row < K + SH; row++, off += T) {
-        u8 *ptr = uv_R(*D, row);
-        size_t got = fread(ptr, 1, T, h);
+        u8 *ptr = D + row * stride;
+        size_t got = 0;
+        if (!feof(h) && !ferror(h))
+            got = fread(ptr, 1, T, h);
         for (u32 col = got; col < T; col++)
-            uv_E(*D, row, col) = 0x5a;
+            D[row * stride + col] = 0x5a;
     }
     fclose(h);
     for (u32 row = K + SH; row < rows; row++)
         for (u32 col = 0; col < T; col++)
-            uv_E(*D, row, col) = 0;
+            D[row * stride + col] = 0;
 }
 
 int main(int argc, char *argv[])
 {
-    int ok = 0;
     nanorq rq;
-    schedule S = {};
-    u8_vec D;
+    uint8_t *D;
 
     struct timespec calc_start, calc_end, ops_start, ops_end;
     if (argc < 5)
@@ -65,40 +65,45 @@ int main(int argc, char *argv[])
     if (R < 1)
         errx(EXIT_FAILURE, "R [repair_count] should be > 0\n");
 
-    if (0 != nanorq_encoder_new(K, 0, &rq))
+    if (!nanorq_encoder_new(K, 0, &rq))
         errx(EXIT_FAILURE, "failed to init codec\n");
+
+    schedule S;
+    size_t sched_bytes = ops_estimate_schedule_bytes(K);
+    schedule_init(&S, malloc(sched_bytes), sched_bytes);
 
     calc_start = now();
     size_t prep_len = nanorq_calculate_prepare_memory(&rq);
     uint8_t *prep_mem = malloc(prep_len);
-    nanorq_prepare(&rq, prep_mem, prep_len);
+    if (!nanorq_prepare(&rq, prep_mem, prep_len)) errx(1, "OOM prepare");
 
     size_t work_len = nanorq_calculate_work_memory(&rq);
     uint8_t *work_mem = malloc(work_len);
     nanorq_set_op_callback(&rq, &S, ops_push);
-    ok = nanorq_precalculate(&rq, work_mem, work_len);
-    assert(ok);
+    if (!nanorq_precalculate(&rq, work_mem, work_len)) errx(1, "precalculate failed");
     calc_end = now();
 
     u32 rows = nanorq_get_pc_rows(&rq);
     u32 SH = nanorq_get_pc_genc_offset(&rq);
-    u32 mem = rows * PAD(T);
-    u8 *base = malloc(mem);
-    u8_vec_init(&D, base, mem, mem, PAD(T));
-    prepare_data_mat(&D, argv[4], rows, T, K, SH);
+    uint32_t stride = nanorq_recommended_stride(T);
+    D = obl_alloc(rows, stride, nanorq_oblas.align_size);
+    prepare_data_mat(D, argv[4], rows, T, K, SH, stride);
+
 
     ops_start = now();
-    ops_run(&rq, &D, &S);
+    ops_run(&rq, D, stride, &S);
     ops_end = now();
 
-    u8 reppkt[PAD(T)];
+
+    u8 *reppkt = malloc(stride);
     for (u32 rp = 0; rp < R; rp++) {
-        ops_mix(&rq, &D, K + rp, reppkt);
+        ops_mix(&rq, D, stride, K + rp, reppkt);
         fprintf(stdout, "RP %3d:", rp);
         for (u32 i = 0; i < T; i++)
             fprintf(stdout, "%02x", reppkt[i]);
         fprintf(stdout, "\n");
     }
+    free(reppkt);
 
     double calc_time = timespec_diff(&calc_end, &calc_start) / (double)NSECS;
     double ops_time = timespec_diff(&ops_end, &ops_start) / (double)NSECS;
@@ -107,8 +112,8 @@ int main(int argc, char *argv[])
 
     free(prep_mem);
     free(work_mem);
-    free(base);
-    kv_destroy(S.ops);
+    free(D);
+    free(S.ops.a);
 
     return 0;
 }
