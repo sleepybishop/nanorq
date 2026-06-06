@@ -4,11 +4,7 @@
 #include "params.h"
 #include "rand.h"
 
-typedef struct {
-    u32 used;
-    u32 max;
-    u8 *base;
-} slab;
+#include "arena.h"
 
 typedef struct {
     u32 used;
@@ -44,8 +40,9 @@ typedef struct _pc {
 
     field_map F; /* map between gf2/gf256 rows */
 
-    slab prep_mem;
-    slab work_mem;
+    arena prep_mem;
+    uint8_t *AT_mem_beg;
+    arena work_mem;
 
     u32_vec *NZT;
     u32_vec *A;
@@ -55,7 +52,7 @@ typedef struct _pc {
 } pc;
 
 void precode_matrix_gen(params *P, pc *W);
-void precode_matrix_prepare(params *P, pc *W);
+bool precode_matrix_prepare(params *P, pc *W);
 int precode_matrix_invert(params *P, pc *W);
 void precode_matrix_make_HDPC(params *P, pc *W);
 void precode_matrix_on_op(void *arg, u32 i, u16 j, u8 u);

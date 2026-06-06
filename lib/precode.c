@@ -65,7 +65,7 @@ void precode_matrix_gen(params *P, pc *W)
     precode_matrix_make_G_ENC(P, W->A);
 }
 
-static void precode_matrix_transpose(params *P, pc *W)
+static bool precode_matrix_transpose(params *P, pc *W)
 {
     u32 u = W->cols - P->P;
     for (u32 row = 0; row < W->rows; row++) {
@@ -78,16 +78,18 @@ static void precode_matrix_transpose(params *P, pc *W)
         }
         uv_A(W->nz, row) = nz;
     }
-    u8 *ptr = W->prep_mem.base + W->prep_mem.used;
-    for (u32 row = 0; row < W->cols; row++)
-        ptr += u32_vec_init(&W->AT[row], ptr, 0, uv_A(W->cnz, row), 0);
-    W->prep_mem.used = (ptr - W->prep_mem.base);
-
-    assert(W->prep_mem.used <= W->prep_mem.max);
+    arena *a = &W->prep_mem;
+    if (!W->AT_mem_beg) W->AT_mem_beg = a->beg;
+    a->beg = W->AT_mem_beg;
+    for (u32 row = 0; row < W->cols; row++) {
+        if (!u32_vec_init(&W->AT[row], a, 0, uv_A(W->cnz, row), 0))
+            return false;
+    }
 
     for (u32 row = 0; row < W->rows; row++)
         for (u32 it = 0; it < uv_size(W->A[row]); it++)
             uv_push(W->AT[uv_A(W->A[row], it)], row);
+    return true;
 }
 
 static void precode_matrix_init_pv(pc *W)
@@ -176,8 +178,10 @@ static void precode_matrix_precond(params *P, pc *W)
         if (chosen >= Srows)
             break;
         if (V0 != chosen) {
+            u32 rval = uv_A(W->d, V0);
+            u32 nzval = uv_A(W->d, chosen);
             TMPSWAP(u32, uv_A(W->d, V0), uv_A(W->d, chosen));
-            TMPSWAP(u32, uv_A(W->di, uv_A(W->d, V0)), uv_A(W->di, uv_A(W->d, chosen)));
+            TMPSWAP(u32, uv_A(W->di, rval), uv_A(W->di, nzval));
         }
         u32 r = precode_matrix_swap_cols(W, V0, Vcols);
         precode_matrix_update_nnz(W, V0, Vcols, r);
@@ -218,7 +222,7 @@ static void precode_matrix_fill_U(pc *W)
 static void hf_scal(pc *W, u32 i, u8 beta)
 {
     u8 *a = (u8 *)&uv_E(W->UL, uv_A(W->F.rowmap, i), 0);
-    obl_scal(a, beta, W->UL.s);
+    nanorq_oblas.scal(a, beta, W->UL.s);
 }
 
 static void hf_axpy(pc *W, u32 i, u32 j, u8 beta)
@@ -227,7 +231,7 @@ static void hf_axpy(pc *W, u32 i, u32 j, u8 beta)
         if (uv_A(W->F.type, i)) {
             u8 *a = (u8 *)&uv_E(W->UL, uv_A(W->F.rowmap, i), 0);
             u8 *b = (u8 *)&uv_E(W->UL, uv_A(W->F.rowmap, j), 0);
-            obl_axpy(a, b, beta, W->UL.s);
+            nanorq_oblas.axpy(a, b, beta, W->UL.s);
         } else {
             bm_add(&W->U, i, j);
         }
@@ -236,7 +240,7 @@ static void hf_axpy(pc *W, u32 i, u32 j, u8 beta)
         if (uv_A(W->F.type, i)) {
             u8 *a = (u8 *)&uv_E(W->UL, uv_A(W->F.rowmap, i), 0);
             u32 *b = &uv_E(W->U, j, 0);
-            obl_axpyb32(a, b, beta, W->UL.s);
+            nanorq_oblas.axpyb32(a, b, beta, W->UL.s);
         } else {
             assert(W->F.used < W->F.max);
             u8 *tmp = &uv_E(W->UL, W->F.used, 0);
@@ -246,7 +250,7 @@ static void hf_axpy(pc *W, u32 i, u32 j, u8 beta)
             W->F.used++;
             u8 *a = (u8 *)&uv_E(W->UL, uv_A(W->F.rowmap, i), 0);
             u8 *b = (u8 *)&uv_E(W->UL, uv_A(W->F.rowmap, j), 0);
-            obl_axpy(a, b, beta, W->UL.s);
+            nanorq_oblas.axpy(a, b, beta, W->UL.s);
         }
     }
 }
@@ -297,8 +301,11 @@ static int precode_matrix_solve_gf2(params *P, pc *W)
         if (nzrow == rows)
             break;
         if (row != nzrow) {
+            u32 rval = uv_A(W->d, row);
+            u32 nzval = uv_A(W->d, nzrow);
             TMPSWAP(u32, uv_A(W->d, row), uv_A(W->d, nzrow));
-            TMPSWAP(u32, uv_A(W->di, drow), uv_A(W->di, uv_A(W->d, nzrow)));
+            TMPSWAP(u32, uv_A(W->di, rval), uv_A(W->di, nzval));
+            drow = nzval;
         }
         for (u32 del_row = row + 1; del_row < rows; del_row++) {
             u32 ddrow = uv_A(W->d, del_row);
@@ -324,8 +331,10 @@ static int precode_matrix_solve_gf256(params *P, pc *W)
         if (nzrow == W->rows)
             break;
         if (row != nzrow) {
+            u32 rval = uv_A(W->d, row);
+            u32 nzval = uv_A(W->d, nzrow);
             TMPSWAP(u32, uv_A(W->d, row), uv_A(W->d, nzrow));
-            TMPSWAP(u32, uv_A(W->di, uv_A(W->d, row)), uv_A(W->di, uv_A(W->d, nzrow)));
+            TMPSWAP(u32, uv_A(W->di, rval), uv_A(W->di, nzval));
         }
         if (beta > 1) {
             hf_scal(W, uv_A(W->d, row), OCT_INV[beta]);
@@ -360,12 +369,14 @@ static void precode_matrix_backsolve(params *P, pc *W)
     }
 }
 
-void precode_matrix_prepare(params *P, pc *W)
+bool precode_matrix_prepare(params *P, pc *W)
 {
     precode_matrix_init_pv(W);
     precode_matrix_sort(P, W);
-    precode_matrix_transpose(P, W);
+    if (!precode_matrix_transpose(P, W))
+        return false;
     precode_matrix_precond(P, W);
+    return true;
 }
 
 int precode_matrix_invert(params *P, pc *W)
