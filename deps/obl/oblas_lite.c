@@ -189,8 +189,8 @@ GENERATE_IMPL(avx2_gfni, __attribute__((target("avx2,gfni"))), __m256i, _mm256_l
     const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                       \
     const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                                                                       \
     const __m256i mask = _mm256_set1_epi8(0x0f);                                                                                   \
-    const __m256i urow_lo = _mm256_loadu2_m128i((const __m128i *)u_lo, (const __m128i *)u_lo);                                     \
-    const __m256i urow_hi = _mm256_loadu2_m128i((const __m128i *)u_hi, (const __m128i *)u_hi)
+    const __m256i urow_lo = _mm256_broadcastsi128_si256(_mm_loadu_si128((const __m128i *)u_lo));                                   \
+    const __m256i urow_hi = _mm256_broadcastsi128_si256(_mm_loadu_si128((const __m128i *)u_hi))
 #define VEC_CORE_avx2_std(bx, res)                                                                                                 \
     __m256i lo_##res = _mm256_and_si256(bx, mask);                                                                                 \
     __m256i hi_##res = _mm256_and_si256(_mm256_srli_epi64(bx, 4), mask);                                                           \
