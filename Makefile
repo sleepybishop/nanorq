@@ -38,6 +38,8 @@ decode: decode.o libnanorq.a
 
 benchmark: benchmark.o $(OBJ)
 
+benchmark_core: benchmark_core.o $(OBJ)
+
 t/00util/matgen: t/00util/matgen.o $(OBJ)
 t/00util/repgen: t/00util/repgen.o $(OBJ)
 t/00util/hdpcgen: t/00util/hdpcgen.o $(OBJ)
@@ -61,11 +63,11 @@ libnanorq.a: $(OBJ)
 	$(AR) rcs $@ $(OBJ)
 
 clean:
-	$(RM) encode decode lib/*.o deps/obl/*.o *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old benchmark $(TEST_UTILS) $(EXAMPLES)
+	$(RM) encode decode lib/*.o deps/obl/*.o *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old benchmark benchmark_core $(TEST_UTILS) $(EXAMPLES)
 	find . -name '*.[a,o]' | xargs $(RM)
 
 indent:
-	clang-format -style=LLVM -i lib/*.c include/*.h examples/*.c t/00util/*.c benchmark.c
+	clang-format -style=LLVM -i lib/*.c include/*.h examples/*.c t/00util/*.c benchmark.c benchmark_core.c
 
 scan:
 	scan-build $(MAKE) clean benchmark
@@ -93,6 +95,15 @@ bench: benchmark
 	@./benchmark 1280 5000 5.0
 	@./benchmark 1280 10000 5.0
 	@./benchmark 1280 50000 5.0
+
+bench-core: benchmark_core
+	@echo "K       encode   precalc  decode  decode-oh5"
+	@./benchmark_core 1280  100 5.0
+	@./benchmark_core 1280  500 5.0
+	@./benchmark_core 1280 1000 5.0
+	@./benchmark_core 1280 5000 5.0
+	@./benchmark_core 1280 10000 5.0
+	@./benchmark_core 1280 50000 5.0
 
 check-embedded:
 	$(MAKE) clean
