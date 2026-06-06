@@ -8,10 +8,11 @@ lib/sched.o\
 lib/spmat.o\
 lib/tuple.o\
 lib/wrkmat.o\
-lib/nanorq.o
+lib/nanorq.o\
+deps/obl/oblas_lite.o
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
-CFLAGS   = -O3 -g -std=c99 -Wall -I. -Iinclude -Ideps/oblas
+CFLAGS   = -O3 -g -std=c99 -Wall -I. -Iinclude -Ideps/obl
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline -fstack-protector-all
 
 all: test libnanorq.a
@@ -44,18 +45,11 @@ graph.dat: benchmark
 graph.png: graph.dat graph.gnuplot
 	gnuplot -e "argtitle='Throughput (packet size=1280) `lscpu|grep -i 'model name'|cut -f2 -d:|xargs`'" graph.gnuplot 
 
-deps/oblas/liboblas.a:
-	$(MAKE) -C deps/oblas CPPFLAGS+="-DOBLAS_AVX -DOCTMAT_ALIGN=32"
+libnanorq.a: $(OBJ)
+	$(AR) rcs $@ $(OBJ)
 
-.PHONY: oblas_clean
-oblas_clean:
-	$(MAKE) -C deps/oblas clean
-
-libnanorq.a: $(OBJ) deps/oblas/liboblas.a
-	$(AR) rcs $@ $(OBJ) deps/oblas/*.o
-
-clean: oblas_clean
-	$(RM) encode decode lib/*.o *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old
+clean:
+	$(RM) encode decode lib/*.o deps/obl/*.o *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old
 
 indent:
 	clang-format -style=LLVM -i lib/*.c include/*.h

@@ -2,7 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "gf2.h"
+#include "oblas_lite.h"
+#include "util.h"
 #include "wrkmat.h"
 
 wrkmat *wrkmat_new(int rows, int cols) {
@@ -10,9 +11,20 @@ wrkmat *wrkmat_new(int rows, int cols) {
   w->rows = rows;
   w->cols = cols;
 
-  w->GF2 = gf2mat_new(rows, cols);
-  w->rowmap = calloc(sizeof(int), rows);
-  w->type = calloc(sizeof(int), rows);
+  w->gf2_stride = ((cols / 32) + ((cols % 32) ? 1 : 0));
+  w->gf2_data = calloc(rows, w->gf2_stride * sizeof(uint32_t));
+  w->row_ptrs = calloc(rows, sizeof(void *));
+  w->type = calloc(rows, sizeof(uint8_t));
+
+  for (int i = 0; i < rows; i++) {
+    w->row_ptrs[i] = w->gf2_data + i * w->gf2_stride * sizeof(uint32_t);
+    w->type[i] = 0;
+  }
+
+  size_t pool_stride = (cols + nanorq_oblas.align_size - 1) & ~(nanorq_oblas.align_size - 1);
+  if (pool_stride == 0) pool_stride = nanorq_oblas.align_size;
+  w->pool_data = obl_alloc(rows, pool_stride, nanorq_oblas.align_size);
+  w->pool_next = 0;
 
   return w;
 }
@@ -20,25 +32,29 @@ wrkmat *wrkmat_new(int rows, int cols) {
 void wrkmat_free(wrkmat *w) {
   if (!w)
     return;
-  if (w->rowmap)
-    free(w->rowmap);
+  if (w->row_ptrs)
+    free(w->row_ptrs);
   if (w->type)
     free(w->type);
-  if (w->GF2)
-    gf2mat_free(w->GF2);
-  om_destroy(&w->GF256);
+  if (w->gf2_data)
+    free(w->gf2_data);
+  if (w->pool_data)
+    obl_free(w->pool_data);
+  if (w->GF256) {
+    if (w->GF256[0]) obl_free(w->GF256[0]);
+    free(w->GF256);
+  }
   free(w);
 }
 
-void wrkmat_assign_block(wrkmat *w, octmat *B, int i, int j, int m, int n) {
-  w->GF256 = *B;
+void wrkmat_assign_block(wrkmat *w, uint8_t **B, int i, int j, int m, int n) {
+  w->GF256 = B;
 
   // overlay GF256 block over GF2
   for (int row = i; row < i + m; row++) {
     w->type[row] = 1;
-    w->rowmap[row] = row - i;
+    w->row_ptrs[row] = w->GF256[row - i];
   }
-  w->blkidx = m;
 }
 
 void wrkmat_print(wrkmat *w, FILE *stream) {
@@ -59,64 +75,67 @@ void wrkmat_print(wrkmat *w, FILE *stream) {
 }
 
 uint8_t wrkmat_get(wrkmat *w, int i, int j) {
-  return w->type[i] ? om_A(w->GF256, w->rowmap[i], j)
-                    : gf2mat_get(w->GF2, i, j);
+  return wrkmat_at(w, i, j);
 }
 
 void wrkmat_set(wrkmat *w, int i, int j, uint8_t b) {
   if (w->type[i]) {
-    om_A(w->GF256, w->rowmap[i], j) = b;
+    ((uint8_t *)w->row_ptrs[i])[j] = b;
   } else if (b <= 1) {
-    gf2mat_set(w->GF2, i, j, b);
+    uint32_t *row = (uint32_t *)w->row_ptrs[i];
+    uint32_t mask = 1U << ((unsigned)j % 32);
+    if (b) {
+      row[(unsigned)j / 32] |= mask;
+    } else {
+      row[(unsigned)j / 32] &= ~mask;
+    }
   } else {
     assert(0 && "unhandled set");
   }
 }
 
+static void wrkmat_promote(wrkmat *w, int i) {
+  if (w->type[i] == 1)
+    return;
+
+  size_t stride = (w->cols + nanorq_oblas.align_size - 1) & ~(nanorq_oblas.align_size - 1);
+  if (stride == 0) stride = nanorq_oblas.align_size;
+  assert(w->pool_next < w->rows);
+  uint8_t *promoted_row = w->pool_data + w->pool_next * stride;
+  w->pool_next++;
+
+  memset(promoted_row, 0, stride);
+  nanorq_oblas.axpyb32(promoted_row, (uint32_t *)w->row_ptrs[i], 1, w->cols);
+
+  w->row_ptrs[i] = promoted_row;
+  w->type[i] = 1;
+}
+
 void wrkmat_axpy(wrkmat *w, int i, int j, int beta) {
   if (w->type[i] == w->type[j]) {
     if (w->type[i]) {
-      oaxpy(om_P(w->GF256), om_P(w->GF256), w->rowmap[i], w->rowmap[j], w->cols,
-            beta);
+      nanorq_oblas.axpy((uint8_t *)w->row_ptrs[i], (uint8_t *)w->row_ptrs[j], beta, w->cols);
     } else {
-      gf2mat_xor(w->GF2, w->GF2, i, j);
+      uint32_t * restrict ap = (uint32_t *)w->row_ptrs[i];
+      uint32_t * restrict bp = (uint32_t *)w->row_ptrs[j];
+      size_t stride = w->gf2_stride;
+      for (size_t idx = 0; idx < stride; idx++) {
+        ap[idx] ^= bp[idx];
+      }
     }
   } else {
-    // if target row is in gf256, axpy in place from gf2 row
     if (w->type[i]) {
-      // uint8_t *tmp = om_R(w->GF256, w->rowmap[i]);
-      // gf2mat_axpy(w->GF2, j, tmp, beta);
-      uint32_t *tmp = w->GF2->bits + w->GF2->stride * j;
-      oaxpy_b32(om_P(w->GF256), tmp, w->rowmap[i], w->cols, beta);
+      nanorq_oblas.axpyb32((uint8_t *)w->row_ptrs[i], (uint32_t *)w->row_ptrs[j], beta, w->cols);
     } else {
-      if (w->blkidx >= w->GF256.rows) {
-        int new_rows = w->GF256.rows * 2;
-        if (new_rows == 0)
-          new_rows = 16;
-        octmat new_mat;
-        om_resize(&new_mat, new_rows, w->GF256.cols);
-        memcpy(new_mat.data, w->GF256.data, w->GF256.rows * w->GF256.cols_al);
-        om_destroy(&w->GF256);
-        w->GF256 = new_mat;
-      }
-      uint8_t *tmp = om_R(w->GF256, w->blkidx);
-      memcpy(tmp, om_R(w->GF256, w->rowmap[j]), w->GF256.cols_al);
-      if (beta != 1) {
-        oscal(om_P(w->GF256), w->blkidx, w->cols, beta);
-      }
-      uint32_t *bit_row = w->GF2->bits + w->GF2->stride * i;
-      oaxpy_b32(om_P(w->GF256), bit_row, w->blkidx, w->cols, 1);
-
-      w->type[i] = 1; // row i is now a gf256 row
-      w->rowmap[i] = w->blkidx;
-      w->blkidx++;
+      wrkmat_promote(w, i);
+      nanorq_oblas.axpy((uint8_t *)w->row_ptrs[i], (uint8_t *)w->row_ptrs[j], beta, w->cols);
     }
   }
 }
 
 void wrkmat_scal(wrkmat *w, int i, int beta) {
   if (w->type[i]) {
-    oscal(om_P(w->GF256), w->rowmap[i], w->cols, beta);
+    nanorq_oblas.scal((uint8_t *)w->row_ptrs[i], beta, w->cols);
   } else {
     assert(0 && "unhandled scal");
   }

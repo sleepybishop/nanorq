@@ -1,10 +1,12 @@
 #include "precode.h"
+#include "util.h"
+#include "oblas_lite.h"
 
-static void precode_matrix_permute(octmat *D, int P[], int n) {
+static void precode_matrix_permute(uint8_t **D, int P[], int n) {
   for (int i = 0; i < n; i++) {
     int at = i, mark = -1;
     while (P[at] >= 0) {
-      oswaprow(om_P(*D), i, P[at], D->cols);
+      TMPSWAP(uint8_t *, D[i], D[P[at]]);
       int tmp = P[at];
       P[at] = mark;
       at = tmp;
@@ -12,34 +14,35 @@ static void precode_matrix_permute(octmat *D, int P[], int n) {
   }
 }
 
-static void precode_matrix_apply_op(octmat *D, schedule *S, int i) {
+static void precode_matrix_apply_op(uint8_t *D_data, size_t stride, size_t D_cols, schedule *S, int i, size_t D_rows) {
   sched_op op = kv_A(S->ops, i);
   if (op.beta)
-    oaxpy(om_P(*D), om_P(*D), op.i, op.j, D->cols, op.beta);
+    nanorq_oblas.axpy(D_data + op.i * stride, D_data + op.j * stride, op.beta, D_cols);
   else
-    oscal(om_P(*D), op.i, D->cols, op.j);
+    nanorq_oblas.scal(D_data + op.i * stride, op.j, D_cols);
 }
 
-static void precode_matrix_apply_sched(octmat *D, schedule *S) {
+static void precode_matrix_apply_sched(uint8_t **D, size_t D_rows, size_t stride, size_t D_cols, schedule *S) {
   int phase1_end = S->marks[0];
   int phase2_end = S->marks[1];
   int total_ops = kv_size(S->ops);
+  uint8_t *D_data = D[0];
 
   /* forward ge (phases 1 & 2) */
   for (int i = 0; i < phase2_end; i++)
-    precode_matrix_apply_op(D, S, i);
+    precode_matrix_apply_op(D_data, stride, D_cols, S, i, D_rows);
 
   /* undo phase 1 row additions */
   for (int i = phase1_end - 1; i >= 0; i--)
-    precode_matrix_apply_op(D, S, i);
+    precode_matrix_apply_op(D_data, stride, D_cols, S, i, D_rows);
 
   /* backsolve (phase 3) */
   for (int i = phase2_end; i < total_ops; i++)
-    precode_matrix_apply_op(D, S, i);
+    precode_matrix_apply_op(D_data, stride, D_cols, S, i, D_rows);
 
   /* reapply phase 1 row additions */
   for (int i = 0; i < phase1_end; i++)
-    precode_matrix_apply_op(D, S, i);
+    precode_matrix_apply_op(D_data, stride, D_cols, S, i, D_rows);
 }
 
 static void precode_matrix_make_identity(spmat *A, int dim, int m, int n) {
@@ -68,27 +71,26 @@ static void precode_matrix_make_LDPC2(spmat *A, int W, int S, int P) {
   }
 }
 
-static octmat precode_matrix_make_HDPC(params *P) {
+static uint8_t **precode_matrix_make_HDPC(params *P) {
   int m = P->H;
   int n = P->Kprime + P->S;
 
   assert(m > 0 && n > 0);
-  octmat HDPC = OM_INITIAL;
-  om_resize(&HDPC, m, n);
+  uint8_t **HDPC = mat_new(m, n);
 
   for (int row = 0; row < m; row++)
-    om_A(HDPC, row, n - 1) = OCT_EXP[row];
+    HDPC[row][n - 1] = GF2_8_EXP[row];
 
   for (int col = n - 2; col >= 0; col--) {
     for (int row = 0; row < m; row++)
-      om_A(HDPC, row, col) =
-          (om_A(HDPC, row, col + 1) == 0)
+      HDPC[row][col] =
+          (HDPC[row][col + 1] == 0)
               ? 0
-              : OCT_EXP[OCT_LOG[om_A(HDPC, row, col + 1)] + 1];
+              : GF2_8_EXP[GF2_8_LOG[HDPC[row][col + 1]] + 1];
     int b1 = rnd_get(col + 1, 6, m);
     int b2 = (b1 + rnd_get(col + 1, 7, m - 1) + 1) % m;
-    om_A(HDPC, b1, col) ^= 1;
-    om_A(HDPC, b2, col) ^= 1;
+    HDPC[b1][col] ^= 1;
+    HDPC[b2][col] ^= 1;
   }
   return HDPC;
 }
@@ -241,25 +243,25 @@ static void precode_matrix_fill_U(wrkmat *U, spmat *A, spmat *AT, schedule *S) {
 }
 
 static void precode_matrix_fill_HDPC(params *P, wrkmat *U, schedule *S) {
-  octmat UL = OM_INITIAL, HDPC = precode_matrix_make_HDPC(P);
-  om_resize(&UL, 2 * P->H, S->u);
+  uint8_t **HDPC = precode_matrix_make_HDPC(P);
+  uint8_t **UL = mat_new(2 * P->H, S->u);
   for (int row = 0; row < P->H; row++) {
-    for (int col = 0; col < UL.cols - P->H; col++)
-      om_A(UL, row, col) =
-          om_A(HDPC, row, S->c[HDPC.cols - (S->u - P->H) + col]);
-    om_A(UL, row, row + (UL.cols - P->H)) = 1; // I_H
+    for (int col = 0; col < S->u - P->H; col++)
+      UL[row][col] =
+          HDPC[row][S->c[(P->Kprime + P->S) - (S->u - P->H) + col]];
+    UL[row][row + (S->u - P->H)] = 1; // I_H
   }
-  wrkmat_assign_block(U, &UL, P->S, 0, P->H, S->u);
+  wrkmat_assign_block(U, UL, P->S, 0, P->H, S->u);
   for (int row = 0; row < S->i; row++) {
     for (int h = 0; h < P->H; h++) {
-      uint8_t beta = om_A(HDPC, h, S->c[row]);
+      uint8_t beta = HDPC[h][S->c[row]];
       if (beta) {
         wrkmat_axpy(U, S->d[U->rows - P->H + h], S->d[row], beta);
         sched_push(S, S->d[U->rows - P->H + h], S->d[row], beta);
       }
     }
   }
-  om_destroy(&HDPC);
+  mat_free(HDPC, P->H);
 }
 
 static wrkmat *precode_matrix_make_U(params *P, spmat *A, spmat *AT,
@@ -311,8 +313,8 @@ static int precode_matrix_solve_gf256(params *P, wrkmat *U, schedule *S) {
       TMPSWAP(int, di[d[row]], di[d[nzrow]]);
     }
     if (beta > 1) {
-      wrkmat_scal(U, d[row], OCT_INV[beta]);
-      sched_push(S, d[row], OCT_INV[beta], 0);
+      wrkmat_scal(U, d[row], GF2_8_INV[beta]);
+      sched_push(S, d[row], GF2_8_INV[beta], 0);
     }
     for (int del_row = row + 1; del_row < rows; del_row++) {
       beta = wrkmat_at(U, d[del_row], col);
@@ -387,8 +389,10 @@ schedule *precode_matrix_invert(params *P, spmat *A) {
   return S;
 }
 
-void precode_matrix_intermediate(params *P, octmat *D, schedule *S) {
-  precode_matrix_apply_sched(D, S);
+void precode_matrix_intermediate(params *P, uint8_t **D, size_t D_rows, size_t D_cols, schedule *S) {
+  size_t stride = (D_cols + nanorq_oblas.align_size - 1) & ~(nanorq_oblas.align_size - 1);
+  if (stride == 0) stride = nanorq_oblas.align_size;
+  precode_matrix_apply_sched(D, D_rows, stride, D_cols, S);
   int *rm = calloc(sizeof(int), S->rows);
   int *cm = calloc(sizeof(int), S->cols);
   memcpy(rm, S->di, sizeof(int) * S->rows);
