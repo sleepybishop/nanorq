@@ -1,4 +1,6 @@
+#include <stdbool.h>
 #include <stdint.h>
+#include "arena.h"
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -34,10 +36,10 @@ DECL_VEC(u8);
         (v).a[(v).n++] = (x);                                                                                                      \
     } while (0)
 
-#if !defined(NDEBUG)
-#define BC(v, i) (i)
+#ifndef NDEBUG
+#define BC(v, i) (((i) < (v).m) ? (i) : (__builtin_trap(), 0))
 #else
-#define BC(v, i) (((i) < (v).m) ? (i) : (*(int *)0 = 0))
+#define BC(v, i) (i)
 #endif
 
 #define uv_A(v, i) ((v).a[BC((v), (i))])
@@ -48,8 +50,8 @@ DECL_VEC(u8);
 #define uv_clear(v) ((v).n = 0)
 #define uv_size(v) ((v).n)
 
-u32 u8_vec_init(u8_vec *v, u8 *a, u32 n, u32 m, u32 s);
-u32 u32_vec_init(u32_vec *v, u8 *a, u32 n, u32 m, u32 s);
+bool u8_vec_init(u8_vec *v, arena *a, u32 n, u32 m, u32 s);
+bool u32_vec_init(u32_vec *v, arena *a, u32 n, u32 m, u32 s);
 
 #if !defined(NDEBUG)
 #define bm_at(v, i, j) bm_get(v, i, j)
