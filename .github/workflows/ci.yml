@@ -1,0 +1,27 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  ci:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ["ubuntu-20.04"]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Dependencies
+        run: |
+          sudo apt update
+          sudo apt install clang-tools valgrind
+
+      - name: Tests
+        run: make check
+
+      - name: Clang Analyzer
+        run: make scan
+
+      - name: Valgrind
+        run: make valgrind
