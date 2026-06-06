@@ -28,7 +28,6 @@ void work_matrix_print(params *P, pc *W, FILE *stream)
 int main(int argc, char *argv[])
 {
     nanorq rq;
-    void *sched = NULL;
 
     if (argc < 2) {
         fprintf(stderr, "usage: %s <K>\n", argv[0]);
@@ -36,7 +35,7 @@ int main(int argc, char *argv[])
     }
 
     int K = strtol(argv[1], NULL, 10);
-    if (K < 5 || K > 56403 || 0 != nanorq_encoder_new(K, 0, &rq)) {
+    if (K < 5 || K > 56403 || !nanorq_encoder_new(K, 0, &rq)) {
         fprintf(stderr, "failed to init codec\n");
         return -1;
     }

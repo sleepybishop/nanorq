@@ -19,8 +19,6 @@ void hdpc_matrix_print(params *P, pc *W, FILE *stream)
 
 int main(int argc, char *argv[])
 {
-    int ok = 0;
-    void *sched = NULL;
 
     if (argc < 2) {
         fprintf(stderr, "usage: %s <K>\n", argv[0]);
@@ -36,10 +34,11 @@ int main(int argc, char *argv[])
     params P = params_init(K);
     pc W = {};
 
-    u32 mem = PAD(P.H * (P.Kprime + P.S));
+    u32 mem = PAD(P.H * (P.Kprime + P.S)) + 32;
     u32 tmp = P.H * (P.Kprime + P.S);
     u8 hdpc_base[mem];
-    u8_vec_init(&W.HDPC, hdpc_base, tmp, tmp, P.Kprime + P.S);
+    arena a = {hdpc_base, hdpc_base + mem};
+    u8_vec_init(&W.HDPC, &a, tmp, tmp, P.Kprime + P.S);
 
     precode_matrix_make_HDPC(&P, &W);
     hdpc_matrix_print(&P, &W, stdout);
