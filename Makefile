@@ -6,7 +6,8 @@ lib/precode.o\
 lib/rand.o\
 lib/tuple.o\
 lib/uvec.o\
-lib/nanorq.o
+lib/nanorq.o\
+lib/ops.o
 
 TEST_UTILS=\
 t/00util/matgen\
@@ -14,15 +15,15 @@ t/00util/repgen\
 t/00util/hdpcgen\
 t/00util/precond\
 t/00util/ult\
-t/00util/schedgen
+t/00util/schedgen\
+t/00util/bounds
 
 EXAMPLES=\
 examples/encode\
 examples/decode
 
-CPPFLAGS := -DOBLAS_AVX2
-CFLAGS   = -O3 -g -std=c11 -Wall -Iinclude -Ideps/ -fPIC
-CFLAGS  += -march=native -funroll-loops -ftree-vectorize -Wno-unused -Wno-sequence-point -fstack-protector-all
+CFLAGS   = -O3 -g -std=c11 -Wall -Iinclude -Ideps/ -fPIC -DNDEBUG
+CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline -Wno-unused -Wno-sequence-point -fstack-protector-all
 
 all: libnanorq.a $(EXAMPLES)
 
@@ -38,15 +39,23 @@ t/00util/ult: t/00util/ult.o $(OBJ)
 
 t/00util/schedgen: t/00util/schedgen.o $(OBJ)
 
+t/00util/bounds: t/00util/bounds.o $(OBJ)
+
 examples/encode: CPPFLAGS += -D_DEFAULT_SOURCE
-examples/encode: examples/encode.o examples/operations.o $(OBJ)
+examples/encode: examples/encode.o $(OBJ)
 
 examples/decode: CPPFLAGS += -D_DEFAULT_SOURCE
-examples/decode: examples/decode.o examples/operations.o $(OBJ)
+examples/decode: examples/decode.o $(OBJ)
+
 
 check: CPPFLAGS=
 check: clean $(TEST_UTILS) $(EXAMPLES)
 	prove -I. -v t/*.t
+
+check-nolibc: clean
+	$(MAKE) libnanorq.a CPPFLAGS="$(CPPFLAGS) -DNANORQ_NO_LIBC"
+	$(MAKE) $(TEST_UTILS)
+	prove -I. -v t/10pcmat.t t/20repmat.t t/30precond.t t/35ult.t t/40hdpc.t t/50schedules.t
 
 libnanorq.a:
 libnanorq.a: $(OBJ) 
@@ -81,7 +90,28 @@ gperf: clean ./examples/encode
 
 ubsan: CC=clang
 ubsan: CFLAGS += -fsanitize=address,undefined
+ubsan: LDFLAGS += -fsanitize=address,undefined
 ubsan: LDLIBS += -lubsan
 ubsan: clean ./examples/encode
 	./examples/encode 56403 1280 10 /dev/zero > /dev/null
+
+benchmark: benchmark.o $(OBJ)
+
+bench: benchmark
+	@echo "K       encode   precalc  decode  decode-oh5"
+	@./benchmark 1280  100 5.0
+	@./benchmark 1280  500 5.0
+	@./benchmark 1280 1000 5.0
+	@./benchmark 1280 5000 5.0
+	@./benchmark 1280 10000 5.0
+	@./benchmark 1280 50000 5.0
+
+check-embedded:
+	$(MAKE) clean
+	$(MAKE) libnanorq.a CPPFLAGS="$(CPPFLAGS) -DNANORQ_NO_LIBC"
+	@echo "--- Undefined symbols in libnanorq.a ---"
+	@nm -u libnanorq.a | grep -E '\b(malloc|calloc|realloc|free|posix_memalign|__assert_fail)\b' && \
+		(echo "FAIL: libc symbols found in embedded build" && exit 1) || \
+		echo "PASS: no libc allocator/assert symbols found"
+
 

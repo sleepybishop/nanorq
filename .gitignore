@@ -4,3 +4,13 @@
 *.swp
 *.gcno
 .DS_Store
+
+examples/encode
+examples/decode
+t/00util/matgen
+t/00util/repgen
+t/00util/hdpcgen
+t/00util/precond
+t/00util/ult
+t/00util/schedgen
+t/00util/bounds
