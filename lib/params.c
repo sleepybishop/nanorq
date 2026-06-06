@@ -2,27 +2,23 @@
 #include "rand.h"
 #include "tuple.h"
 
-static bool is_prime(uint16_t n) {
+static int is_prime(u32 n) {
   if (n <= 1)
-    return false;
+    return 0;
   if (n <= 3)
-    return true;
-
+    return 1;
   if (n % 2 == 0 || n % 3 == 0)
-    return false;
-
-  for (int i = 5; i * i <= n; i = i + 6)
+    return 0;
+  for (u32 i = 5; i * i <= n; i = i + 6)
     if (n % i == 0 || n % (i + 2) == 0)
-      return false;
-
-  return true;
+      return 0;
+  return 1;
 }
 
-params params_init(uint16_t K) {
-  params P = {0};
-  unsigned i;
+params params_init(u32 K) {
+  params P;
 
-  for (i = 0; i < K_padded_size; i++) {
+  for (u32 i = 0; i < K_padded_size; i++) {
     if (K <= K_padded[i]) {
       P.Kprime = K_padded[i];
       P.J = J_K_padded[i];
@@ -32,8 +28,8 @@ params params_init(uint16_t K) {
       break;
     }
   }
-  assert(i < K_padded_size);
 
+  P.K = K;
   P.L = P.Kprime + P.S + P.H;
   P.P = P.L - P.W;
   P.U = P.P - P.H;
@@ -46,22 +42,28 @@ params params_init(uint16_t K) {
   return P;
 }
 
-void params_set_idxs(uint32_t X, params *P, uint_vec *dst) {
+u32 params_set_idxs(params *P, u32 X, u32_vec *dst) {
+  u32 num = 0;
   tuple t = gen_tuple(X, P);
 
-  kv_push(unsigned, *dst, t.b);
-  for (unsigned j = 1; j < t.d; j++) {
+  uv_push(*dst, t.b);
+  num++;
+  for (u32 j = 1; j < t.d; j++) {
     t.b = (t.b + t.a) % P->W;
-    kv_push(unsigned, *dst, t.b);
+    uv_push(*dst, t.b);
+    num++;
   }
   while (t.b1 >= P->P)
     t.b1 = (t.b1 + t.a1) % P->P1;
 
-  kv_push(unsigned, *dst, P->W + t.b1);
-  for (unsigned j = 1; j < t.d1; j++) {
+  uv_push(*dst, P->W + t.b1);
+  num++;
+  for (u32 j = 1; j < t.d1; j++) {
     t.b1 = (t.b1 + t.a1) % P->P1;
     while (t.b1 >= P->P)
       t.b1 = (t.b1 + t.a1) % P->P1;
-    kv_push(unsigned, *dst, P->W + t.b1);
+    uv_push(*dst, P->W + t.b1);
+    num++;
   }
+  return num;
 }

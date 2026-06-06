@@ -1,19 +1,19 @@
 OBJ=\
-lib/bitmask.o\
+lib/chooser.o\
 lib/io.o\
+lib/nanorq.o\
+lib/nanorq_core.o\
+lib/ops.o\
 lib/params.o\
 lib/precode.o\
 lib/rand.o\
-lib/sched.o\
-lib/spmat.o\
 lib/tuple.o\
-lib/wrkmat.o\
-lib/nanorq.o\
+lib/uvec.o\
 deps/obl/oblas_lite.o
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
-CFLAGS   = -O3 -g -std=c99 -Wall -I. -Iinclude -Ideps/obl
-CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline -fstack-protector-all
+CFLAGS   = -O3 -g -std=c11 -Wall -I. -Iinclude -Ideps/
+CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline -fstack-protector-all -Wno-unused -Wno-sequence-point
 
 all: test libnanorq.a
 
@@ -49,7 +49,7 @@ libnanorq.a: $(OBJ)
 	$(AR) rcs $@ $(OBJ)
 
 clean:
-	$(RM) encode decode lib/*.o deps/obl/*.o *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old
+	$(RM) encode decode lib/*.o deps/obl/*.o *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old benchmark
 
 indent:
 	clang-format -style=LLVM -i lib/*.c include/*.h
@@ -72,4 +72,3 @@ ubsan: CFLAGS += -fsanitize=address,undefined,implicit-conversion,integer
 ubsan: LDLIBS += -lubsan
 ubsan: clean benchmark
 	./benchmark 1280 50000 0
-
