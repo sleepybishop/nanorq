@@ -8,4 +8,4 @@ name = "raptorq_interop"
 path = "src/main.rs"
 
 [dependencies]
-raptorq = { path = "../../raptorq" }
+raptorq = "2.0.1"
