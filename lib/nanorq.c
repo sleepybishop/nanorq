@@ -698,10 +698,10 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   u32 new_rows = old_rows + overhead;
   uint8_t *new_D = obl_alloc(new_rows, dec->stride, nanorq_oblas.align_size);
   if (dec->D) {
-    memcpy(new_D, dec->D, old_rows * dec->stride);
+    memcpy(new_D, dec->D, (size_t)old_rows * dec->stride);
     obl_free(dec->D);
   }
-  memset(new_D + old_rows * dec->stride, 0, overhead * dec->stride);
+  memset(new_D + (size_t)old_rows * dec->stride, 0, (size_t)overhead * dec->stride);
   dec->D = new_D;
 
   if (!nanorq_core_encoder_new(dec->K, overhead, &dec->core)) {
