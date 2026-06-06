@@ -260,9 +260,7 @@ static struct block_encoder *get_block_encoder(nanorq *rq, uint8_t sbn) {
   struct block_encoder *enc = calloc(1, sizeof(struct block_encoder));
   enc->K = nanorq_block_symbols(rq, sbn);
 
-  if (rq->max_esi) {
-    enc->repair_mask = compat_bitmask_new(rq->max_esi);
-  }
+  enc->repair_mask = compat_bitmask_new(enc->K);
 
   rq->encoders[sbn] = enc;
   return enc;
@@ -315,7 +313,7 @@ nanorq *nanorq_encoder_new_ex(size_t len, uint16_t T, uint16_t K, uint16_t Z,
   rq->sub_part = fill_partition(rq->common.T / rq->common.Al, rq->scheme.N);
   rq->P = params_init(nanorq_block_symbols(rq, 0));
 
-  rq->max_esi = 4 * rq->P.Kprime;
+  rq->max_esi = (1 << 24) - 1;
 
   return rq;
 }
@@ -401,7 +399,7 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
   rq->sub_part = fill_partition(rq->common.T / rq->common.Al, rq->scheme.N);
   rq->P = params_init(nanorq_block_symbols(rq, 0));
 
-  rq->max_esi = 4 * rq->P.Kprime;
+  rq->max_esi = (1 << 24) - 1;
   return rq;
 }
 
@@ -615,21 +613,29 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
   uint32_t esi = (tag & 0x00ffffff);
 
   struct block_encoder *dec = get_block_encoder(rq, sbn);
-  if (dec == NULL || esi > rq->max_esi)
+  if (dec == NULL || esi >= (1 << 24) || esi > rq->max_esi)
     return NANORQ_SYM_ERR;
 
   if (compat_bitmask_gaps(&dec->repair_mask, dec->K) == 0) {
     return NANORQ_SYM_IGN;
   }
 
-  if (compat_bitmask_check(&dec->repair_mask, esi))
-    return NANORQ_SYM_DUP;
+  if (esi < dec->K) {
+    if (compat_bitmask_check(&dec->repair_mask, esi))
+      return NANORQ_SYM_DUP;
+  } else {
+    for (size_t i = 0; i < dec->repair_bin.n; i++) {
+      if (dec->repair_bin.a[i].esi == esi) {
+        return NANORQ_SYM_DUP;
+      }
+    }
+  }
 
   if (!dec->D) {
     if (!nanorq_core_encoder_new(dec->K, 0, &dec->core)) {
       return NANORQ_SYM_ERR;
     }
-    u32 rows = nanorq_core_get_pc_rows(&dec->core) + (rq->max_esi - dec->K);
+    u32 rows = nanorq_core_get_pc_rows(&dec->core);
     dec->stride = nanorq_core_recommended_stride(rq->common.T);
     dec->D = obl_alloc(rows, dec->stride, nanorq_oblas.align_size);
     nanorq_core_init_matrix(&dec->core, dec->D, dec->stride);
@@ -639,6 +645,7 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
     nanorq_core_place_symbol(&dec->core, dec->D, dec->stride, esi, data,
                              rq->common.T);
     transfer_esi(rq, sbn, esi, dec->K, data, rq->common.T, io, 1);
+    compat_bitmask_set(&dec->repair_mask, esi);
   } else {
     repair_sym rs;
     rs.esi = esi;
@@ -646,7 +653,6 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
     memcpy(rs.row, data, rq->common.T);
     repair_vec_push(&dec->repair_bin, rs);
   }
-  compat_bitmask_set(&dec->repair_mask, esi);
 
   return NANORQ_SYM_ADDED;
 }
@@ -687,6 +693,16 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   }
 
   size_t overhead = num_repair - num_gaps;
+
+  u32 old_rows = nanorq_core_get_pc_rows(&dec->core);
+  u32 new_rows = old_rows + overhead;
+  uint8_t *new_D = obl_alloc(new_rows, dec->stride, nanorq_oblas.align_size);
+  if (dec->D) {
+    memcpy(new_D, dec->D, old_rows * dec->stride);
+    obl_free(dec->D);
+  }
+  memset(new_D + old_rows * dec->stride, 0, overhead * dec->stride);
+  dec->D = new_D;
 
   if (!nanorq_core_encoder_new(dec->K, overhead, &dec->core)) {
     return false;
