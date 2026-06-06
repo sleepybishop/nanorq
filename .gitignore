@@ -19,4 +19,4 @@ t/00util/ult
 t/00util/schedgen
 t/00util/bounds
 .DS_Store
-interop_test_dir
+t/interop_test_dir

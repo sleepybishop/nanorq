@@ -45,11 +45,11 @@ K_LOSS_RATES_LARGE=(0.0 10.0)                  # K ≥ 5000 (fewer rates for spe
 
 # ---------------------------------------------------------------------------
 echo "Building nanorq..."
-make > /dev/null
+(cd .. && make) > /dev/null
 
 echo "Building raptorq_interop..."
 cd raptorq_interop
-source ~/.cargo/env
+[ -f ~/.cargo/env ] && source ~/.cargo/env || true
 cargo build --release 2>&1 | grep -v "^$" | grep -v "Compiling\|Finished\|Locking\|warning" || true
 cd ..
 
@@ -73,7 +73,7 @@ run_test() {
     head -c "$size" /dev/urandom > test_in.bin
 
     # 1. nanorq encode -> raptorq decode
-    if ! ../encode test_in.bin "$psize" "$loss" 5 > encode.log 2>&1; then
+    if ! ../../encode test_in.bin "$psize" "$loss" 5 > encode.log 2>&1; then
         echo "FAILED [nanorq encode] $label"
         FAIL=$((FAIL + 1)); rm -f data.rq test_out.bin encode.log decode.log test_in.bin; return
     fi
@@ -93,7 +93,7 @@ run_test() {
         echo "FAILED [raptorq encode] $label"
         FAIL=$((FAIL + 1)); rm -f data.rq test_out.bin encode.log decode.log test_in.bin; return
     fi
-    if ! ../decode test_out.bin > decode.log 2>&1; then
+    if ! ../../decode test_out.bin > decode.log 2>&1; then
         echo "FAILED [nanorq decode] $label"
         FAIL=$((FAIL + 1)); rm -f data.rq test_out.bin encode.log decode.log test_in.bin; return
     fi

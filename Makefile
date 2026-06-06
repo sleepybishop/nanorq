@@ -125,4 +125,4 @@ valgrind: clean $(TEST_UTILS) $(EXAMPLES)
 	valgrind --error-exitcode=2 ./examples/encode   500 64 10 t/assets/sample_data/raw > /dev/null
 
 check-interop:
-	./interop_harness.sh
+	./t/interop_harness.sh

@@ -25,3 +25,6 @@ jobs:
 
       - name: Valgrind
         run: make valgrind
+
+      - name: Interoperability Tests
+        run: make check-interop
