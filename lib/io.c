@@ -115,7 +115,7 @@ static size_t memio_write(struct ioctx *io, const uint8_t *buf, size_t len) {
 
 static bool memio_seek(struct ioctx *io, const size_t offset) {
   struct memioctx *_io = (struct memioctx *)io;
-  if (offset >= _io->size)
+  if (offset > _io->size)
     return false;
   _io->pos = offset;
   return true;
