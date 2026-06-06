@@ -15,7 +15,7 @@ struct oblas_impl nanorq_oblas = {.align_size = 32};
 bool nanorq_core_encoder_new(u32 K, u32 overhead, nanorq_core *rq) {
   if (!rq)
     return false;
-  if (K < 2 || K > K_max)
+  if (K < 1 || K > K_max)
     return false;
   rq->P = params_init(K);
   rq->overhead = overhead;

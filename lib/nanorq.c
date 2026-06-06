@@ -534,7 +534,8 @@ size_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
       free(tmp);
       return rq->common.T;
     } else {
-      return transfer_esi(rq, sbn, esi, enc->K, data, rq->common.T, io, 0);
+      transfer_esi(rq, sbn, esi, enc->K, data, rq->common.T, io, 0);
+      return rq->common.T;
     }
   } else {
     if (esi > ((1 << 24) - 1))

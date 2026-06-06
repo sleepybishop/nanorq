@@ -1,0 +1,11 @@
+[package]
+name = "raptorq_interop"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "raptorq_interop"
+path = "src/main.rs"
+
+[dependencies]
+raptorq = { path = "../raptorq" }
