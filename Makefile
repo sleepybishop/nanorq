@@ -5,11 +5,14 @@ lib/nanorq.o\
 lib/nanorq_core.o\
 lib/ops.o\
 lib/params.o\
+lib/partition.o\
+lib/sopi.o\
 lib/precode.o\
 lib/rand.o\
 lib/tuple.o\
 lib/uvec.o\
 deps/obl/oblas_lite.o
+
 
 TEST_UTILS=\
 t/00util/matgen\
@@ -17,7 +20,8 @@ t/00util/repgen\
 t/00util/hdpcgen\
 t/00util/precond\
 t/00util/ult\
-t/00util/schedgen
+t/00util/schedgen\
+t/00util/test_utils
 
 EXAMPLES=\
 examples/encode\
@@ -46,6 +50,7 @@ t/00util/hdpcgen: t/00util/hdpcgen.o $(OBJ)
 t/00util/precond: t/00util/precond.o $(OBJ)
 t/00util/ult: t/00util/ult.o $(OBJ)
 t/00util/schedgen: t/00util/schedgen.o $(OBJ)
+t/00util/test_utils: t/00util/test_utils.o $(OBJ)
 
 examples/encode: examples/encode.o $(OBJ)
 examples/decode: examples/decode.o $(OBJ)

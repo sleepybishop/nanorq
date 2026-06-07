@@ -5,6 +5,7 @@
 #include "nanorq.h"
 #include "nanorq_core.h"
 #include "nanorq_ops.h"
+#include "partition.h"
 #include "util.h"
 
 static inline size_t div_ceil(size_t a, size_t b) { return (a + b - 1) / b; }
@@ -21,13 +22,6 @@ struct oti_scheme {
   size_t Z;  /* number of source blocks */
   size_t N;  /* number of sub-blocks in each source block */
   size_t Kt; /* the total number of symbols required to represent input */
-};
-
-struct partition {
-  size_t IL; /* size of long blocks */
-  size_t IS; /* size of short blocks*/
-  size_t JL; /* number of long blocks */
-  size_t JS; /* number of short blocks */
 };
 
 struct source_block {
@@ -179,19 +173,7 @@ static struct oti_scheme gen_scheme_specific(struct oti_common *common, int K,
   return ret;
 }
 
-static struct partition fill_partition(size_t I, uint16_t J) {
-  struct partition p = {0, 0, 0, 0};
-  if (J == 0)
-    return p;
-  p.IL = (size_t)(div_ceil(I, J));
-  p.IS = (size_t)(div_floor(I, J));
-  p.JL = (size_t)(I - p.IS * J);
-  p.JS = J - p.JL;
-
-  if (p.JL == 0)
-    p.IL = 0;
-  return p;
-}
+// fill_partition extracted to lib/partition.c
 
 static struct source_block get_source_block(nanorq *rq, uint8_t sbn,
                                             uint16_t symbol_size) {
@@ -257,7 +239,8 @@ static struct block_encoder *get_block_encoder(nanorq *rq, uint8_t sbn) {
   if (rq->encoders[sbn])
     return rq->encoders[sbn];
 
-  struct block_encoder *enc = (struct block_encoder *)calloc(1, sizeof(struct block_encoder));
+  struct block_encoder *enc =
+      (struct block_encoder *)calloc(1, sizeof(struct block_encoder));
   enc->K = nanorq_block_symbols(rq, sbn);
 
   enc->repair_mask = compat_bitmask_new(enc->K);
@@ -309,8 +292,8 @@ nanorq *nanorq_encoder_new_ex(size_t len, uint16_t T, uint16_t K, uint16_t Z,
     return NULL;
   }
 
-  rq->src_part = fill_partition(rq->scheme.Kt, rq->scheme.Z);
-  rq->sub_part = fill_partition(rq->common.T / rq->common.Al, rq->scheme.N);
+  rq->src_part = partition_fill(rq->scheme.Kt, rq->scheme.Z);
+  rq->sub_part = partition_fill(rq->common.T / rq->common.Al, rq->scheme.N);
   rq->P = params_init(nanorq_block_symbols(rq, 0));
 
   rq->max_esi = (1 << 24) - 1;
@@ -396,8 +379,8 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
     return NULL;
   }
 
-  rq->src_part = fill_partition(rq->scheme.Kt, rq->scheme.Z);
-  rq->sub_part = fill_partition(rq->common.T / rq->common.Al, rq->scheme.N);
+  rq->src_part = partition_fill(rq->scheme.Kt, rq->scheme.Z);
+  rq->sub_part = partition_fill(rq->common.T / rq->common.Al, rq->scheme.N);
   rq->P = params_init(nanorq_block_symbols(rq, 0));
 
   rq->max_esi = (1 << 24) - 1;
@@ -643,8 +626,8 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
   }
 
   if (esi < dec->K) {
-    nanorq_core_place_symbol(&dec->core, dec->D, dec->stride, esi, (const uint8_t *)data,
-                             rq->common.T);
+    nanorq_core_place_symbol(&dec->core, dec->D, dec->stride, esi,
+                             (const uint8_t *)data, rq->common.T);
     transfer_esi(rq, sbn, esi, dec->K, (uint8_t *)data, rq->common.T, io, 1);
     compat_bitmask_set(&dec->repair_mask, esi);
   } else {
@@ -700,7 +683,8 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   if (new_rows < old_rows) {
     return false; // overflow
   }
-  uint8_t *new_D = (uint8_t *)obl_alloc(new_rows, dec->stride, nanorq_oblas.align_size);
+  uint8_t *new_D =
+      (uint8_t *)obl_alloc(new_rows, dec->stride, nanorq_oblas.align_size);
   if (!new_D) {
     return false;
   }
