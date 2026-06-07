@@ -1,14 +1,13 @@
 #include "tuple.h"
 #include "rand.h"
 
-static const u32 degree_dist[] = {
+const u32 degree_dist[] = {
     0,       5243,    529531,  704294,  791675,  844104,  879057,  904023,
     922747,  937311,  948962,  958494,  966438,  973160,  978921,  983914,
     988283,  992138,  995565,  998631,  1001391, 1003887, 1006157, 1008229,
     1010129, 1011876, 1013490, 1014983, 1016370, 1017662, 1048576};
 
-static const u16 degree_dist_size =
-    sizeof(degree_dist) / sizeof(degree_dist[0]);
+const u16 degree_dist_size = sizeof(degree_dist) / sizeof(degree_dist[0]);
 
 static u16 deg(u32 v, u32 W) {
   for (u16 d = 0; d < degree_dist_size; d++) {

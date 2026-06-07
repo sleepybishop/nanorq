@@ -14,4 +14,7 @@ typedef struct {
 
 tuple gen_tuple(u32 X, params *P);
 
+extern const u32 degree_dist[];
+extern const u16 degree_dist_size;
+
 #endif
