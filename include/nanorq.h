@@ -7,6 +7,10 @@
 
 #include "io.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define NANORQ_SYM_DUP 2
 #define NANORQ_SYM_IGN 1
 #define NANORQ_SYM_ADDED 0
@@ -81,5 +85,9 @@ size_t nanorq_num_repair(nanorq *rq, uint8_t sbn);
 
 // return whether or not sbn was successfully repaired
 bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ioctx {
   size_t (*read)(struct ioctx *, uint8_t *, size_t);
   size_t (*write)(struct ioctx *, const uint8_t *, size_t);
@@ -18,5 +22,9 @@ struct ioctx {
 struct ioctx *ioctx_from_file(const char *fn, int t);
 struct ioctx *ioctx_mmap_file(const char *fn, int t);
 struct ioctx *ioctx_from_mem(const uint8_t *ptr, size_t t);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,3 +1,6 @@
+#ifndef UVEC_H
+#define UVEC_H
+
 #include "arena.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -64,3 +67,5 @@ void bm_set(u32_vec *v, u32 i, u32 j);
 void bm_add(u32_vec *v, u32 i, u32 j);
 void bm_fill(u32_vec *v, u32 i, u8 *dst);
 u32 bm_gap(u32_vec *v, u32 i, u32 until);
+
+#endif /* UVEC_H */

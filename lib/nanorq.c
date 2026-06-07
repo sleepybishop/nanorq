@@ -94,7 +94,7 @@ struct nanorq {
 static void repair_vec_push(repair_vec *v, repair_sym val) {
   if (v->n >= v->m) {
     v->m = v->m == 0 ? 8 : v->m * 2;
-    v->a = realloc(v->a, v->m * sizeof(repair_sym));
+    v->a = (repair_sym *)realloc(v->a, v->m * sizeof(repair_sym));
   }
   v->a[v->n++] = val;
 }
@@ -113,7 +113,7 @@ static void repair_vec_free(repair_vec *v) {
 static compat_bitmask compat_bitmask_new(size_t size) {
   compat_bitmask b;
   size_t num_words = (size + 31) / 32;
-  b.words = calloc(num_words, sizeof(uint32_t));
+  b.words = (uint32_t *)calloc(num_words, sizeof(uint32_t));
   b.size = size;
   return b;
 }
@@ -257,7 +257,7 @@ static struct block_encoder *get_block_encoder(nanorq *rq, uint8_t sbn) {
   if (rq->encoders[sbn])
     return rq->encoders[sbn];
 
-  struct block_encoder *enc = calloc(1, sizeof(struct block_encoder));
+  struct block_encoder *enc = (struct block_encoder *)calloc(1, sizeof(struct block_encoder));
   enc->K = nanorq_block_symbols(rq, sbn);
 
   enc->repair_mask = compat_bitmask_new(enc->K);
@@ -296,7 +296,7 @@ nanorq *nanorq_encoder_new_ex(size_t len, uint16_t T, uint16_t K, uint16_t Z,
 
   oblas_get_impl(&nanorq_oblas);
 
-  nanorq *rq = calloc(1, sizeof(nanorq));
+  nanorq *rq = (nanorq *)calloc(1, sizeof(nanorq));
   rq->common.F = len;
   rq->common.T = T;
   rq->common.Al = Al;
@@ -373,7 +373,7 @@ nanorq *nanorq_decoder_new(uint64_t common, uint32_t scheme) {
 
   oblas_get_impl(&nanorq_oblas);
 
-  nanorq *rq = calloc(1, sizeof(nanorq));
+  nanorq *rq = (nanorq *)calloc(1, sizeof(nanorq));
   rq->common.F = F;
   rq->common.T = T;
 
@@ -424,7 +424,7 @@ bool nanorq_precalculate(nanorq *rq) {
 
   uint16_t K = nanorq_block_symbols(rq, 0);
 
-  rq->precalc_core = calloc(1, sizeof(nanorq_core));
+  rq->precalc_core = (nanorq_core *)calloc(1, sizeof(nanorq_core));
   if (!nanorq_core_encoder_new(K, 0, rq->precalc_core)) {
     free(rq->precalc_core);
     rq->precalc_core = NULL;
@@ -432,17 +432,17 @@ bool nanorq_precalculate(nanorq *rq) {
   }
 
   size_t prep_len = nanorq_core_calculate_prepare_memory(rq->precalc_core);
-  rq->precalc_prep_mem = malloc(prep_len);
+  rq->precalc_prep_mem = (uint8_t *)malloc(prep_len);
   if (!nanorq_core_prepare(rq->precalc_core, rq->precalc_prep_mem, prep_len)) {
     return false;
   }
 
   size_t work_len = nanorq_core_calculate_work_memory(rq->precalc_core);
-  rq->precalc_work_mem = malloc(work_len);
+  rq->precalc_work_mem = (uint8_t *)malloc(work_len);
 
-  rq->precalc_S = calloc(1, sizeof(schedule));
+  rq->precalc_S = (schedule *)calloc(1, sizeof(schedule));
   size_t sched_bytes = ops_estimate_schedule_bytes(K);
-  schedule_init(rq->precalc_S, malloc(sched_bytes), sched_bytes);
+  schedule_init(rq->precalc_S, (uint8_t *)malloc(sched_bytes), sched_bytes);
 
   nanorq_core_set_op_callback(rq->precalc_core, rq->precalc_S, ops_push);
   if (!nanorq_core_precalculate(rq->precalc_core, rq->precalc_work_mem,
@@ -468,12 +468,12 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
       }
       u32 rows = nanorq_core_get_pc_rows(&enc->core);
       enc->stride = nanorq_core_recommended_stride(rq->common.T);
-      enc->D = obl_alloc(rows, enc->stride, nanorq_oblas.align_size);
+      enc->D = (uint8_t *)obl_alloc(rows, enc->stride, nanorq_oblas.align_size);
       nanorq_core_init_matrix(&enc->core, enc->D, enc->stride);
     }
 
     for (int esi = 0; esi < enc->K; esi++) {
-      uint8_t *tmp_buf = malloc(rq->common.T);
+      uint8_t *tmp_buf = (uint8_t *)malloc(rq->common.T);
       if (!tmp_buf)
         return false;
       size_t got =
@@ -495,16 +495,16 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
   }
 
   enc->prep_len = nanorq_core_calculate_prepare_memory(&enc->core);
-  enc->prep_mem = malloc(enc->prep_len);
+  enc->prep_mem = (uint8_t *)malloc(enc->prep_len);
   if (!nanorq_core_prepare(&enc->core, enc->prep_mem, enc->prep_len)) {
     return false;
   }
 
   enc->work_len = nanorq_core_calculate_work_memory(&enc->core);
-  enc->work_mem = malloc(enc->work_len);
+  enc->work_mem = (uint8_t *)malloc(enc->work_len);
 
   size_t sched_bytes = ops_estimate_schedule_bytes(enc->K);
-  schedule_init(&enc->S, malloc(sched_bytes), sched_bytes);
+  schedule_init(&enc->S, (uint8_t *)malloc(sched_bytes), sched_bytes);
 
   nanorq_core_set_op_callback(&enc->core, &enc->S, ops_push);
   if (!nanorq_core_precalculate(&enc->core, enc->work_mem, enc->work_len)) {
@@ -525,7 +525,7 @@ size_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
 
   if (esi < enc->K) {
     if (enc->inverted) {
-      uint8_t *tmp = malloc(enc->stride);
+      uint8_t *tmp = (uint8_t *)malloc(enc->stride);
       if (!tmp)
         return 0;
       ops_mix(&enc->core, enc->D, enc->stride, esi, tmp);
@@ -533,7 +533,7 @@ size_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
       free(tmp);
       return rq->common.T;
     } else {
-      transfer_esi(rq, sbn, esi, enc->K, data, rq->common.T, io, 0);
+      transfer_esi(rq, sbn, esi, enc->K, (uint8_t *)data, rq->common.T, io, 0);
       return rq->common.T;
     }
   } else {
@@ -544,7 +544,7 @@ size_t nanorq_encode(nanorq *rq, void *data, uint32_t esi, uint8_t sbn,
         return 0;
       }
     }
-    uint8_t *tmp = malloc(enc->stride);
+    uint8_t *tmp = (uint8_t *)malloc(enc->stride);
     if (!tmp)
       return 0;
     ops_mix(&enc->core, enc->D, enc->stride, esi, tmp);
@@ -638,19 +638,19 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
     }
     u32 rows = nanorq_core_get_pc_rows(&dec->core);
     dec->stride = nanorq_core_recommended_stride(rq->common.T);
-    dec->D = obl_alloc(rows, dec->stride, nanorq_oblas.align_size);
+    dec->D = (uint8_t *)obl_alloc(rows, dec->stride, nanorq_oblas.align_size);
     nanorq_core_init_matrix(&dec->core, dec->D, dec->stride);
   }
 
   if (esi < dec->K) {
-    nanorq_core_place_symbol(&dec->core, dec->D, dec->stride, esi, data,
+    nanorq_core_place_symbol(&dec->core, dec->D, dec->stride, esi, (const uint8_t *)data,
                              rq->common.T);
-    transfer_esi(rq, sbn, esi, dec->K, data, rq->common.T, io, 1);
+    transfer_esi(rq, sbn, esi, dec->K, (uint8_t *)data, rq->common.T, io, 1);
     compat_bitmask_set(&dec->repair_mask, esi);
   } else {
     repair_sym rs;
     rs.esi = esi;
-    rs.row = obl_alloc(1, dec->stride, nanorq_oblas.align_size);
+    rs.row = (uint8_t *)obl_alloc(1, dec->stride, nanorq_oblas.align_size);
     memcpy(rs.row, data, rq->common.T);
     repair_vec_push(&dec->repair_bin, rs);
   }
@@ -700,7 +700,7 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   if (new_rows < old_rows) {
     return false; // overflow
   }
-  uint8_t *new_D = obl_alloc(new_rows, dec->stride, nanorq_oblas.align_size);
+  uint8_t *new_D = (uint8_t *)obl_alloc(new_rows, dec->stride, nanorq_oblas.align_size);
   if (!new_D) {
     return false;
   }
@@ -716,7 +716,7 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   }
 
   dec->prep_len = nanorq_core_calculate_prepare_memory(&dec->core);
-  dec->prep_mem = malloc(dec->prep_len);
+  dec->prep_mem = (uint8_t *)malloc(dec->prep_len);
   if (!nanorq_core_prepare(&dec->core, dec->prep_mem, dec->prep_len)) {
     free(dec->prep_mem);
     dec->prep_mem = NULL;
@@ -746,10 +746,10 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   }
 
   dec->work_len = nanorq_core_calculate_work_memory(&dec->core);
-  dec->work_mem = malloc(dec->work_len);
+  dec->work_mem = (uint8_t *)malloc(dec->work_len);
 
   size_t sched_bytes = ops_estimate_schedule_bytes(dec->K);
-  schedule_init(&dec->S, malloc(sched_bytes), sched_bytes);
+  schedule_init(&dec->S, (uint8_t *)malloc(sched_bytes), sched_bytes);
 
   nanorq_core_set_op_callback(&dec->core, &dec->S, ops_push);
   if (!nanorq_core_precalculate(&dec->core, dec->work_mem, dec->work_len)) {
@@ -758,7 +758,7 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
 
   ops_run(&dec->core, dec->D, dec->stride, &dec->S);
 
-  uint8_t *recovered = malloc(dec->stride);
+  uint8_t *recovered = (uint8_t *)malloc(dec->stride);
   if (!recovered)
     return false;
 

@@ -133,7 +133,7 @@ uint32_t nanorq_core_get_packet_mix(nanorq_core *rq, u32 esi,
   u32 X = esi;
   if (esi >= P->K)
     X += (P->Kprime - P->K);
-  u32_vec mix = {.a = mix_idxs, .m = mix_max, .n = 0, .s = 0};
+  u32_vec mix = {.m = mix_max, .n = 0, .s = 0, .a = mix_idxs};
   params_set_idxs(P, X, &mix);
   return mix.n;
 }
@@ -234,7 +234,7 @@ bool nanorq_core_precalculate(nanorq_core *rq, u8 *work_mem, size_t wm_len) {
 }
 
 void nanorq_core_set_op_callback(nanorq_core *rq, void *arg,
-                                 void (*on_op)(void *, u32, u16, u8)) {
+                                 void (*on_op)(void *, u32, u32, u8)) {
   pc *W = &rq->W;
   W->cb.on_op_arg = arg;
   W->cb.on_op = on_op;

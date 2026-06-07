@@ -65,7 +65,7 @@ struct ioctx *ioctx_from_file(const char *fn, int t) {
   if (!fp)
     return NULL;
 
-  _io = calloc(1, sizeof(struct fileioctx));
+  _io = (struct fileioctx *)calloc(1, sizeof(struct fileioctx));
   _io->fp = fp;
 
   _io->io.read = fileio_read;
@@ -140,7 +140,7 @@ static size_t memio_size(struct ioctx *io) {
 struct ioctx *ioctx_from_mem(const uint8_t *ptr, size_t sz) {
   struct memioctx *_io = NULL;
 
-  _io = calloc(1, sizeof(struct memioctx));
+  _io = (struct memioctx *)calloc(1, sizeof(struct memioctx));
   _io->ptr = (uint8_t *)ptr;
   _io->pos = 0;
   _io->size = sz;
@@ -173,9 +173,9 @@ static uint8_t *mmapio_mmap(size_t mapsize, bool writable, int fd,
   uint8_t *ptr = NULL;
 
   if (writable) {
-    ptr = mmap(NULL, mapsize, PROT_WRITE, MAP_SHARED, fd, offset);
+    ptr = (uint8_t *)mmap(NULL, mapsize, PROT_WRITE, MAP_SHARED, fd, offset);
   } else {
-    ptr = mmap(NULL, mapsize, PROT_READ, MAP_SHARED, fd, offset);
+    ptr = (uint8_t *)mmap(NULL, mapsize, PROT_READ, MAP_SHARED, fd, offset);
   }
 
   if (ptr == MAP_FAILED) {
@@ -346,7 +346,7 @@ struct ioctx *ioctx_mmap_file(const char *fn, int t) {
     ptr = mmapio_mmap(mapsize, true, fd, offset);
   }
 
-  _io = calloc(1, sizeof(struct mmapioctx));
+  _io = (struct mmapioctx *)calloc(1, sizeof(struct mmapioctx));
   _io->fd = fd;
   _io->ptr = ptr;
   _io->filesize = filesize;

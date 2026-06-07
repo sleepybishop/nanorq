@@ -47,13 +47,13 @@ int main(int argc, char *argv[]) {
   }
 
   size_t prep_len = nanorq_core_calculate_prepare_memory(&rq);
-  uint8_t *prep_mem = malloc(prep_len);
+  uint8_t *prep_mem = (uint8_t *)malloc(prep_len);
   size_t work_len = nanorq_core_calculate_work_memory(&rq);
-  uint8_t *work_mem = malloc(work_len);
+  uint8_t *work_mem = (uint8_t *)malloc(work_len);
 
   schedule S_enc = {};
   size_t sched_bytes = ops_estimate_schedule_bytes(K);
-  S_enc.ops.a = malloc(sched_bytes);
+  S_enc.ops.a = (sched_op *)malloc(sched_bytes);
   S_enc.ops.m = sched_bytes / sizeof(sched_op);
   nanorq_core_set_op_callback(&rq, &S_enc, ops_push);
 
@@ -66,8 +66,8 @@ int main(int argc, char *argv[]) {
   u32 SH = nanorq_core_get_pc_genc_offset(&rq);
   u32 stride = nanorq_core_recommended_stride(T);
   u32 mem = rows * stride;
-  uint8_t *D = obl_alloc(rows, stride, nanorq_oblas.align_size);
-  uint8_t *D_backup = malloc(mem);
+  uint8_t *D = (uint8_t *)obl_alloc(rows, stride, nanorq_oblas.align_size);
+  uint8_t *D_backup = (uint8_t *)malloc(mem);
 
   memset(D_backup, 0, mem);
   for (u32 row = SH; row < SH + K; row++) {
@@ -137,17 +137,17 @@ int main(int argc, char *argv[]) {
   if (drops <= 0)
     drops = 1;
 
-  u32 *dropped_esi = malloc(sizeof(u32) * drops);
+  u32 *dropped_esi = (u32 *)malloc(sizeof(u32) * drops);
   for (u32 rp = 0; rp < (u32)drops; rp++) {
     dropped_esi[rp] = rp;
   }
 
-  uint8_t *repair_pkts = malloc(drops * stride);
+  uint8_t *repair_pkts = (uint8_t *)malloc(drops * stride);
   for (u32 rp = 0; rp < (u32)drops; rp++) {
     ops_mix(&rq, D, stride, K + rp, repair_pkts + rp * stride);
   }
 
-  uint8_t *orig_pkts = malloc(drops * stride);
+  uint8_t *orig_pkts = (uint8_t *)malloc(drops * stride);
   for (u32 rp = 0; rp < (u32)drops; rp++) {
     memcpy(orig_pkts + rp * stride, D_backup + (SH + dropped_esi[rp]) * stride,
            PAD(T));
@@ -160,17 +160,17 @@ int main(int argc, char *argv[]) {
   }
 
   size_t dec_prep_len = nanorq_core_calculate_prepare_memory(&dec);
-  uint8_t *dec_prep_mem = malloc(dec_prep_len);
+  uint8_t *dec_prep_mem = (uint8_t *)malloc(dec_prep_len);
   size_t dec_work_len = nanorq_core_calculate_work_memory(&dec);
-  uint8_t *dec_work_mem = malloc(dec_work_len);
+  uint8_t *dec_work_mem = (uint8_t *)malloc(dec_work_len);
 
   schedule S_dec = {};
-  S_dec.ops.a = malloc(sched_bytes);
+  S_dec.ops.a = (sched_op *)malloc(sched_bytes);
   S_dec.ops.m = sched_bytes / sizeof(sched_op);
   nanorq_core_set_op_callback(&dec, &S_dec, ops_push);
 
-  uint8_t *D_dec = obl_alloc(rows, stride, nanorq_oblas.align_size);
-  uint8_t *decoded_pkts = malloc(drops * stride);
+  uint8_t *D_dec = (uint8_t *)obl_alloc(rows, stride, nanorq_oblas.align_size);
+  uint8_t *decoded_pkts = (uint8_t *)malloc(drops * stride);
 
   bytes = 0;
   t0 = usecs();
@@ -248,7 +248,7 @@ int main(int argc, char *argv[]) {
     overhead = 1;
 
   free(repair_pkts);
-  repair_pkts = malloc((drops + overhead) * stride);
+  repair_pkts = (uint8_t *)malloc((drops + overhead) * stride);
   for (u32 rp = 0; rp < (u32)(drops + overhead); rp++) {
     ops_mix(&rq, D, stride, K + rp, repair_pkts + rp * stride);
   }
@@ -260,13 +260,13 @@ int main(int argc, char *argv[]) {
   }
 
   size_t dec_oh_prep_len = nanorq_core_calculate_prepare_memory(&dec_oh);
-  uint8_t *dec_oh_prep_mem = malloc(dec_oh_prep_len);
+  uint8_t *dec_oh_prep_mem = (uint8_t *)malloc(dec_oh_prep_len);
   size_t dec_oh_work_len = nanorq_core_calculate_work_memory(&dec_oh);
-  uint8_t *dec_oh_work_mem = malloc(dec_oh_work_len);
+  uint8_t *dec_oh_work_mem = (uint8_t *)malloc(dec_oh_work_len);
 
   schedule S_dec_oh = {};
   size_t dec_oh_sched_bytes = ops_estimate_schedule_bytes(K + overhead);
-  S_dec_oh.ops.a = malloc(dec_oh_sched_bytes);
+  S_dec_oh.ops.a = (sched_op *)malloc(dec_oh_sched_bytes);
   S_dec_oh.ops.m = dec_oh_sched_bytes / sizeof(sched_op);
   nanorq_core_set_op_callback(&dec_oh, &S_dec_oh, ops_push);
 
@@ -277,7 +277,8 @@ int main(int argc, char *argv[]) {
 
   u32 rows_oh = nanorq_core_get_pc_rows(&dec_oh);
   u32 mem_oh = rows_oh * stride;
-  uint8_t *D_dec_oh = obl_alloc(rows_oh, stride, nanorq_oblas.align_size);
+  uint8_t *D_dec_oh =
+      (uint8_t *)obl_alloc(rows_oh, stride, nanorq_oblas.align_size);
 
   double t_prep = 0.0, t_precalc = 0.0, t_ops_run = 0.0, t_ops_mix = 0.0;
   bytes = 0;

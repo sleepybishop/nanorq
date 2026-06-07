@@ -68,7 +68,7 @@ void nanorq_core_set_choose_callback(nanorq_core *rq, void *arg,
 
 /* set callback for when data matrix operations are computed */
 void nanorq_core_set_op_callback(nanorq_core *rq, void *arg,
-                                 void (*on_op)(void *, u32, u16, u8));
+                                 void (*on_op)(void *, u32, u32, u8));
 
 /* get the offset to the GENC rows in precode matrix */
 static uint32_t nanorq_core_get_pc_genc_offset(nanorq_core *rq);

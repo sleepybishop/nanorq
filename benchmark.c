@@ -34,7 +34,7 @@ void random_bytes(uint8_t *buf, uint64_t len) {
 void dump_esi(nanorq *rq, struct ioctx *myio, int sbn, uint32_t esi,
               symvec *packets) {
   int packet_size = nanorq_symbol_size(rq);
-  uint8_t *data = malloc(packet_size);
+  uint8_t *data = (uint8_t *)malloc(packet_size);
   uint64_t written = nanorq_encode(rq, (void *)data, esi, sbn, myio);
 
   if (written != packet_size) {
@@ -44,7 +44,7 @@ void dump_esi(nanorq *rq, struct ioctx *myio, int sbn, uint32_t esi,
     exit(1);
   } else {
     uint32_t tag = nanorq_tag(sbn, esi);
-    struct sym s = {.tag = tag, .data = data};
+    struct sym s = {tag, data};
     kv_push(struct sym, *packets, s);
   }
 }
@@ -177,8 +177,8 @@ int run(size_t num_packets, size_t packet_size, float overhead_pct,
   struct ioctx *myio_in, *myio_out;
 
   uint64_t sz = num_packets * packet_size;
-  uint8_t *in = calloc(1, sz);
-  uint8_t *out = calloc(1, sz);
+  uint8_t *in = (uint8_t *)calloc(1, sz);
+  uint8_t *out = (uint8_t *)calloc(1, sz);
   random_bytes(in, sz);
 
   myio_in = ioctx_from_mem(in, sz);

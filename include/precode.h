@@ -17,7 +17,7 @@ struct _pc;
 
 typedef struct {
   void *on_op_arg;
-  void (*on_op)(void *arg, u32 i, u16 j, u8 u);
+  void (*on_op)(void *arg, u32 i, u32 j, u8 u);
   void *on_choose_arg;
   u32 (*on_choose)(void *arg, struct _pc *, u32 V0, u32 Vrows, u32 Srows,
                    u32 Vcols);
@@ -56,7 +56,7 @@ void precode_matrix_gen(params *P, pc *W);
 bool precode_matrix_prepare(params *P, pc *W);
 int precode_matrix_invert(params *P, pc *W);
 void precode_matrix_make_HDPC(params *P, pc *W);
-void precode_matrix_on_op(void *arg, u32 i, u16 j, u8 u);
+void precode_matrix_on_op(void *arg, u32 i, u32 j, u8 u);
 u32 precode_matrix_choose(void *arg, pc *W, u32 V0, u32 Vrows, u32 Srows,
                           u32 Vcols);
 

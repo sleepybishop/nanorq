@@ -69,16 +69,16 @@ int main(int argc, char *argv[]) {
 
   schedule S;
   size_t sched_bytes = ops_estimate_schedule_bytes(K);
-  schedule_init(&S, malloc(sched_bytes), sched_bytes);
+  schedule_init(&S, (uint8_t *)malloc(sched_bytes), sched_bytes);
 
   calc_start = now();
   size_t prep_len = nanorq_core_calculate_prepare_memory(&rq);
-  uint8_t *prep_mem = malloc(prep_len);
+  uint8_t *prep_mem = (uint8_t *)malloc(prep_len);
   if (!nanorq_core_prepare(&rq, prep_mem, prep_len))
     errx(1, "OOM prepare");
 
   size_t work_len = nanorq_core_calculate_work_memory(&rq);
-  uint8_t *work_mem = malloc(work_len);
+  uint8_t *work_mem = (uint8_t *)malloc(work_len);
   nanorq_core_set_op_callback(&rq, &S, ops_push);
   if (!nanorq_core_precalculate(&rq, work_mem, work_len))
     errx(1, "precalculate failed");
@@ -87,14 +87,14 @@ int main(int argc, char *argv[]) {
   u32 rows = nanorq_core_get_pc_rows(&rq);
   u32 SH = nanorq_core_get_pc_genc_offset(&rq);
   uint32_t stride = nanorq_core_recommended_stride(T);
-  D = obl_alloc(rows, stride, nanorq_oblas.align_size);
+  D = (uint8_t *)obl_alloc(rows, stride, nanorq_oblas.align_size);
   prepare_data_mat(D, argv[4], rows, T, K, SH, stride);
 
   ops_start = now();
   ops_run(&rq, D, stride, &S);
   ops_end = now();
 
-  u8 *reppkt = malloc(stride);
+  u8 *reppkt = (u8 *)malloc(stride);
   for (u32 rp = 0; rp < R; rp++) {
     ops_mix(&rq, D, stride, K + rp, reppkt);
     fprintf(stdout, "RP %3d:", rp);

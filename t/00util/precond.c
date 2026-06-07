@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
   }
 
   size_t prep_len = nanorq_core_calculate_prepare_memory(&rq);
-  uint8_t *prep_mem = malloc(prep_len);
+  uint8_t *prep_mem = (uint8_t *)malloc(prep_len);
   nanorq_core_prepare(&rq, prep_mem, prep_len);
   precode_matrix_print(&rq.P, &rq.W, stdout);
 

@@ -1,21 +1,13 @@
-#include <stdbool.h>
-#ifndef UVEC_H
-#define UVEC_H
+#ifdef __cplusplus
+#define restrict __restrict
+#endif
 
 #include "uvec.h"
-
-struct oblas_impl {
-  void (*axpy)(uint8_t *restrict a, uint8_t *restrict b, uint8_t u, unsigned k);
-  void (*scal)(uint8_t *restrict a, uint8_t u, unsigned k);
-  void (*axiy)(uint8_t *restrict a, uint8_t *restrict b, uint8_t u, unsigned k);
-  void (*axpyb32)(uint8_t *restrict a, uint32_t *restrict b, uint8_t u,
-                  unsigned k);
-  size_t align_size;
-};
-extern struct oblas_impl nanorq_oblas;
+#include "util.h"
+#include <stdbool.h>
 
 bool u8_vec_init(u8_vec *v, arena *a, u32 n, u32 m, u32 s) {
-  v->a = alloc(a, sizeof(u8), nanorq_oblas.align_size, m);
+  v->a = (u8 *)alloc(a, sizeof(u8), nanorq_oblas.align_size, m);
   if (!v->a && m > 0)
     return false;
   v->s = s;
@@ -25,7 +17,7 @@ bool u8_vec_init(u8_vec *v, arena *a, u32 n, u32 m, u32 s) {
 }
 
 bool u32_vec_init(u32_vec *v, arena *a, u32 n, u32 m, u32 s) {
-  v->a = alloc(a, sizeof(u32), nanorq_oblas.align_size, m);
+  v->a = (u32 *)alloc(a, sizeof(u32), nanorq_oblas.align_size, m);
   if (!v->a && m > 0)
     return false;
   v->s = s;
@@ -84,5 +76,3 @@ u32 bm_gap(u32_vec *v, u32 i, u32 until) {
   }
   return UINT32_MAX;
 }
-
-#endif

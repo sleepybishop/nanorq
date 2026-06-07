@@ -1,6 +1,10 @@
 #ifndef ARENA_H
 #define ARENA_H
 
+#ifdef __cplusplus
+#define _Alignof alignof
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>

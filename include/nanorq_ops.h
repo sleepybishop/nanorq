@@ -25,7 +25,7 @@ typedef struct {
  * ops_estimate_schedule_bytes(k). */
 bool schedule_init(schedule *S, void *buf, size_t buf_bytes);
 
-void ops_push(void *arg, u32 i, u16 j, u8 u);
+void ops_push(void *arg, u32 i, u32 j, u8 u);
 void ops_run(nanorq_core *rq, uint8_t *D, uint32_t stride, schedule *S);
 void ops_mix(nanorq_core *rq, uint8_t *D, uint32_t stride, u32 esi, u8 *ptr);
 size_t ops_estimate_schedule_bytes(uint32_t K);

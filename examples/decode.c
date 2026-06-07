@@ -69,17 +69,17 @@ int main(int argc, char *argv[]) {
 
   size_t sched_bytes = ops_estimate_schedule_bytes(K);
   schedule S_enc, S_dec;
-  schedule_init(&S_enc, malloc(sched_bytes), sched_bytes);
-  schedule_init(&S_dec, malloc(sched_bytes), sched_bytes);
+  schedule_init(&S_enc, (uint8_t *)malloc(sched_bytes), sched_bytes);
+  schedule_init(&S_dec, (uint8_t *)malloc(sched_bytes), sched_bytes);
 
   calc_start = now();
   size_t prep_len = nanorq_core_calculate_prepare_memory(&rq);
-  uint8_t *prep_mem = malloc(prep_len);
+  uint8_t *prep_mem = (uint8_t *)malloc(prep_len);
   if (!nanorq_core_prepare(&rq, prep_mem, prep_len))
     errx(1, "OOM prepare");
 
   size_t work_len = nanorq_core_calculate_work_memory(&rq);
-  uint8_t *work_mem = malloc(work_len);
+  uint8_t *work_mem = (uint8_t *)malloc(work_len);
   nanorq_core_set_op_callback(&rq, &S_enc, ops_push);
   if (!nanorq_core_precalculate(&rq, work_mem, work_len))
     errx(EXIT_FAILURE, "encoder precalculate failed\n");
@@ -89,11 +89,11 @@ int main(int argc, char *argv[]) {
   uint32_t stride = nanorq_core_recommended_stride(T);
   u32 mem = rows * stride;
 
-  D = obl_alloc(rows, stride, nanorq_oblas.align_size);
+  D = (uint8_t *)obl_alloc(rows, stride, nanorq_oblas.align_size);
   prepare_data_mat(D, argv[4], rows, T, K, SH, stride);
 
   /* backup d matrix before ops_run */
-  u8 *D_backup = malloc((size_t)mem);
+  u8 *D_backup = (u8 *)malloc((size_t)mem);
   for (u32 row = 0; row < rows; row++) {
     u8 *src = (D + row * stride);
     u8 *dst = D_backup + row * stride;
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
 
   u8 *orig_pkts = NULL;
   if (drops > 0)
-    orig_pkts = calloc(drops, (size_t)stride);
+    orig_pkts = (u8 *)calloc(drops, (size_t)stride);
   for (u32 rp = 0; rp < drops; rp++) {
     u8 *src = (D + (SH + rp) * stride);
     for (u32 i = 0; i < PAD(T); i++) {
@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
   /* save repair packets */
   u8 *repair_pkts = NULL;
   if (drops > 0)
-    repair_pkts = calloc(drops, (size_t)stride);
+    repair_pkts = (u8 *)calloc(drops, (size_t)stride);
   for (u32 rp = 0; rp < drops; rp++) {
     ops_mix(&rq, D, stride, K + rp, repair_pkts + rp * stride);
   }
@@ -144,7 +144,7 @@ int main(int argc, char *argv[]) {
 
   free(work_mem);
   work_len = nanorq_core_calculate_work_memory(&rq);
-  work_mem = malloc(work_len);
+  work_mem = (uint8_t *)malloc(work_len);
 
   nanorq_core_set_op_callback(&rq, &S_dec, ops_push);
   if (!nanorq_core_precalculate(&rq, work_mem, work_len))
@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
   ops_end = now();
 
   int diffs = 0;
-  u8 *reppkt = calloc(1, (size_t)stride);
+  u8 *reppkt = (u8 *)calloc(1, (size_t)stride);
   for (u32 rp = 0; rp < drops; rp++) {
     ops_mix(&rq, D, stride, rp, reppkt);
     u8 *expected = orig_pkts + rp * stride;

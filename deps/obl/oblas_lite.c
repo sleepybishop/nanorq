@@ -1,3 +1,7 @@
+#ifdef __cplusplus
+#define register
+#endif
+
 #include "oblas_lite.h"
 #ifndef NANORQ_NO_LIBC
 #include <stdlib.h>

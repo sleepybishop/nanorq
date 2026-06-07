@@ -59,11 +59,11 @@ static void ops_permute(uint8_t *D, uint32_t stride, u32 P[], u32 n) {
   }
 }
 
-void ops_push(void *arg, u32 i, u16 j, u8 u) {
+void ops_push(void *arg, u32 i, u32 j, u8 u) {
   schedule *S = (schedule *)arg;
   if (!S || !S->ops.a)
     return;
-  sched_op op = {.i = i, .j = j, .u = u};
+  sched_op op = {u, i, j};
   if (i == 0 && j == 0 && u == 0) {
     if (S->cpidx < 2) {
       S->cp[S->cpidx++] = S->ops.n;
@@ -138,22 +138,22 @@ bool nanorq_core_encode_simple(uint8_t *src_data, uint32_t K, uint16_t T,
   struct nanorq_core_mem_reqs reqs;
   nanorq_core_get_memory_reqs(K, 0, T, &reqs);
 
-  uint8_t *prep_mem = malloc(reqs.prepare_bytes);
+  uint8_t *prep_mem = (uint8_t *)malloc(reqs.prepare_bytes);
   if (!nanorq_core_prepare(&rq, prep_mem, reqs.prepare_bytes)) {
     free(prep_mem);
     return false;
   }
 
-  uint8_t *D = calloc(1, reqs.matrix_bytes);
+  uint8_t *D = (uint8_t *)calloc(1, reqs.matrix_bytes);
   uint32_t SH = nanorq_core_get_pc_genc_offset(&rq);
 
   for (uint32_t i = 0; i < K; i++) {
     memcpy(D + (SH + i) * T, src_data + i * T, T);
   }
 
-  uint8_t *work_mem = malloc(reqs.work_bytes);
+  uint8_t *work_mem = (uint8_t *)malloc(reqs.work_bytes);
   schedule S_enc = {0};
-  S_enc.ops.a = malloc(reqs.schedule_bytes);
+  S_enc.ops.a = (sched_op *)malloc(reqs.schedule_bytes);
   S_enc.ops.m = reqs.schedule_bytes / sizeof(sched_op);
 
   nanorq_core_set_op_callback(&rq, &S_enc, ops_push);

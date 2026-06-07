@@ -5,7 +5,7 @@
 
 #include "nanorq_core.h"
 
-void sched_op(void *arg, u32 i, u16 j, u8 u) {
+void sched_op(void *arg, u32 i, u32 j, u8 u) {
   FILE *stream = (FILE *)arg;
   fprintf(stream, "%u %u %u\n", i, j, u);
 }
@@ -25,11 +25,11 @@ int main(int argc, char *argv[]) {
   }
 
   size_t prep_len = nanorq_core_calculate_prepare_memory(&rq);
-  uint8_t *prep_mem = malloc(prep_len);
+  uint8_t *prep_mem = (uint8_t *)malloc(prep_len);
   nanorq_core_prepare(&rq, prep_mem, prep_len);
 
   size_t work_len = nanorq_core_calculate_work_memory(&rq);
-  uint8_t *work_mem = malloc(work_len);
+  uint8_t *work_mem = (uint8_t *)malloc(work_len);
   nanorq_core_set_op_callback(&rq, stdout, sched_op);
   nanorq_core_precalculate(&rq, work_mem, work_len);
   fflush(stdout);
