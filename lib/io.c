@@ -17,11 +17,15 @@ struct fileioctx {
 
 static size_t fileio_read(struct ioctx *io, uint8_t *buf, size_t len) {
   struct fileioctx *_io = (struct fileioctx *)io;
+  if (!buf)
+    return 0;
   return fread(buf, 1, len, _io->fp);
 }
 
 static size_t fileio_write(struct ioctx *io, const uint8_t *buf, size_t len) {
   struct fileioctx *_io = (struct fileioctx *)io;
+  if (!io->writable || !buf)
+    return 0;
   return fwrite(buf, 1, len, _io->fp);
 }
 
@@ -52,11 +56,11 @@ static size_t fileio_size(struct ioctx *io) {
   return ret;
 }
 
-struct ioctx *ioctx_from_file(const char *fn, int t) {
+struct ioctx *ioctx_from_file(const char *fn, int mode) {
   struct fileioctx *_io = NULL;
   FILE *fp;
 
-  if (t) {
+  if (mode == IOCTX_MODE_READ) {
     fp = fopen(fn, "r");
   } else {
     fp = fopen(fn, "w+"); // create decoder
@@ -66,6 +70,10 @@ struct ioctx *ioctx_from_file(const char *fn, int t) {
     return NULL;
 
   _io = (struct fileioctx *)calloc(1, sizeof(struct fileioctx));
+  if (!_io) {
+    fclose(fp);
+    return NULL;
+  }
   _io->fp = fp;
 
   _io->io.read = fileio_read;
@@ -75,7 +83,7 @@ struct ioctx *ioctx_from_file(const char *fn, int t) {
   _io->io.tell = fileio_tell;
   _io->io.destroy = fileio_destroy;
   _io->io.seekable = true;
-  _io->io.writable = (t == 0);
+  _io->io.writable = (mode == IOCTX_MODE_WRITE);
 
   return (struct ioctx *)_io;
 }
@@ -83,34 +91,40 @@ struct ioctx *ioctx_from_file(const char *fn, int t) {
 struct memioctx {
   struct ioctx io;
   uint8_t *ptr;
+  const uint8_t *ro_ptr;
   size_t pos;
   size_t size;
 };
 
 static size_t memio_read(struct ioctx *io, uint8_t *buf, size_t len) {
   struct memioctx *_io = (struct memioctx *)io;
-  if (_io->pos + len > _io->size) {
-    size_t diff = _io->size - _io->pos;
-    memcpy(buf, _io->ptr + _io->pos, diff);
-    _io->pos = _io->size;
-    return diff;
-  }
-  memcpy(buf, _io->ptr + _io->pos, len);
-  _io->pos += len;
-  return len;
+  if (!buf)
+    return 0;
+  if (_io->pos >= _io->size)
+    return 0;
+
+  size_t available = _io->size - _io->pos;
+  size_t to_read = (len > available) ? available : len;
+
+  const uint8_t *src = _io->io.writable ? _io->ptr : _io->ro_ptr;
+  memcpy(buf, src + _io->pos, to_read);
+  _io->pos += to_read;
+  return to_read;
 }
 
 static size_t memio_write(struct ioctx *io, const uint8_t *buf, size_t len) {
   struct memioctx *_io = (struct memioctx *)io;
-  if (_io->pos + len > _io->size) {
-    size_t diff = _io->size - _io->pos;
-    memcpy(_io->ptr + _io->pos, buf, diff);
-    _io->pos = _io->size;
-    return diff;
-  }
-  memcpy(_io->ptr + _io->pos, buf, len);
-  _io->pos += len;
-  return len;
+  if (!_io->io.writable || !buf)
+    return 0;
+  if (_io->pos >= _io->size)
+    return 0;
+
+  size_t available = _io->size - _io->pos;
+  size_t to_write = (len > available) ? available : len;
+
+  memcpy(_io->ptr + _io->pos, buf, to_write);
+  _io->pos += to_write;
+  return to_write;
 }
 
 static bool memio_seek(struct ioctx *io, const size_t offset) {
@@ -123,7 +137,7 @@ static bool memio_seek(struct ioctx *io, const size_t offset) {
 
 static long memio_tell(struct ioctx *io) {
   struct memioctx *_io = (struct memioctx *)io;
-  return _io->pos;
+  return (long)_io->pos;
 }
 
 static void memio_destroy(struct ioctx *io) {
@@ -137,11 +151,15 @@ static size_t memio_size(struct ioctx *io) {
   return _io->size;
 }
 
-struct ioctx *ioctx_from_mem(const uint8_t *ptr, size_t sz) {
-  struct memioctx *_io = NULL;
+struct ioctx *ioctx_from_mem(uint8_t *ptr, size_t sz) {
+  if (!ptr)
+    return NULL;
+  struct memioctx *_io = (struct memioctx *)calloc(1, sizeof(struct memioctx));
+  if (!_io)
+    return NULL;
 
-  _io = (struct memioctx *)calloc(1, sizeof(struct memioctx));
-  _io->ptr = (uint8_t *)ptr;
+  _io->ptr = ptr;
+  _io->ro_ptr = ptr;
   _io->pos = 0;
   _io->size = sz;
 
@@ -153,6 +171,30 @@ struct ioctx *ioctx_from_mem(const uint8_t *ptr, size_t sz) {
   _io->io.destroy = memio_destroy;
   _io->io.seekable = true;
   _io->io.writable = true;
+
+  return (struct ioctx *)_io;
+}
+
+struct ioctx *ioctx_from_mem_ro(const uint8_t *ptr, size_t sz) {
+  if (!ptr)
+    return NULL;
+  struct memioctx *_io = (struct memioctx *)calloc(1, sizeof(struct memioctx));
+  if (!_io)
+    return NULL;
+
+  _io->ptr = NULL;
+  _io->ro_ptr = ptr;
+  _io->pos = 0;
+  _io->size = sz;
+
+  _io->io.read = memio_read;
+  _io->io.write = memio_write;
+  _io->io.seek = memio_seek;
+  _io->io.size = memio_size;
+  _io->io.tell = memio_tell;
+  _io->io.destroy = memio_destroy;
+  _io->io.seekable = true;
+  _io->io.writable = false;
 
   return (struct ioctx *)_io;
 }
@@ -173,14 +215,14 @@ static uint8_t *mmapio_mmap(size_t mapsize, bool writable, int fd,
   uint8_t *ptr = NULL;
 
   if (writable) {
-    ptr = (uint8_t *)mmap(NULL, mapsize, PROT_WRITE, MAP_SHARED, fd, offset);
+    ptr = (uint8_t *)mmap(NULL, mapsize, PROT_WRITE | PROT_READ, MAP_SHARED, fd,
+                          offset);
   } else {
     ptr = (uint8_t *)mmap(NULL, mapsize, PROT_READ, MAP_SHARED, fd, offset);
   }
 
   if (ptr == MAP_FAILED) {
-    perror("mmap() failed: ");
-    exit(EXIT_FAILURE);
+    return NULL;
   }
   return ptr;
 }
@@ -198,19 +240,30 @@ static bool mmapio_seek(struct ioctx *io, const size_t offset) {
 
   if (_io->io.writable) {
     if (offset < _io->offset || offset < _io->filesize) {
-      munmap(_io->ptr, _io->mapsize);
+      if (_io->ptr) {
+        munmap(_io->ptr, _io->mapsize);
+        _io->ptr = NULL;
+      }
       _io->offset = (offset / _io->mapsize) * _io->mapsize;
       _io->ptr =
           mmapio_mmap(_io->mapsize, _io->io.writable, _io->fd, _io->offset);
+      if (!_io->ptr)
+        return false;
       _io->pos = offset;
       return true;
     } else {
-      munmap(_io->ptr, _io->mapsize);
+      if (_io->ptr) {
+        munmap(_io->ptr, _io->mapsize);
+        _io->ptr = NULL;
+      }
       _io->offset = (offset / _io->mapsize) * _io->mapsize;
       _io->filesize = (offset > _io->filesize) ? offset : _io->filesize;
-      ftruncate(_io->fd, _io->offset + _io->mapsize);
+      if (ftruncate(_io->fd, _io->offset + _io->mapsize) != 0)
+        return false;
       _io->ptr =
           mmapio_mmap(_io->mapsize, _io->io.writable, _io->fd, _io->offset);
+      if (!_io->ptr)
+        return false;
       _io->pos = offset;
       return true;
     }
@@ -220,12 +273,17 @@ static bool mmapio_seek(struct ioctx *io, const size_t offset) {
     return false;
 
   if (!_io->io.writable) {
-    munmap(_io->ptr, _io->lastmap);
+    if (_io->ptr) {
+      munmap(_io->ptr, _io->lastmap);
+      _io->ptr = NULL;
+    }
     _io->offset = (offset / _io->mapsize) * _io->mapsize;
     size_t tmp = _io->mapsize;
     if (_io->offset + tmp > _io->filesize)
       tmp = _io->filesize - _io->offset;
     _io->ptr = mmapio_mmap(tmp, _io->io.writable, _io->fd, _io->offset);
+    if (!_io->ptr)
+      return false;
     _io->pos = offset;
     _io->lastmap = tmp;
     return true;
@@ -237,6 +295,8 @@ static bool mmapio_seek(struct ioctx *io, const size_t offset) {
 static size_t mmapio_read(struct ioctx *io, uint8_t *buf, size_t len) {
   struct mmapioctx *_io = (struct mmapioctx *)io;
   size_t read_bytes = 0;
+  if (!buf || !_io->ptr)
+    return 0;
 
   while (read_bytes < len) {
     if (_io->pos >= _io->filesize)
@@ -265,6 +325,9 @@ static size_t mmapio_write(struct ioctx *io, const uint8_t *buf, size_t len) {
   struct mmapioctx *_io = (struct mmapioctx *)io;
   size_t written = 0;
 
+  if (!_io->io.writable || !buf || !_io->ptr)
+    return 0;
+
   while (written < len) {
     size_t at = _io->pos % _io->mapsize;
     size_t avail = _io->mapsize - at;
@@ -291,12 +354,14 @@ static size_t mmapio_write(struct ioctx *io, const uint8_t *buf, size_t len) {
 
 static long mmapio_tell(struct ioctx *io) {
   struct mmapioctx *_io = (struct mmapioctx *)io;
-  return _io->pos;
+  return (long)_io->pos;
 }
 
 static void mmapio_destroy(struct ioctx *io) {
   struct mmapioctx *_io = (struct mmapioctx *)io;
-  munmap(_io->ptr, _io->lastmap);
+  if (_io->ptr) {
+    munmap(_io->ptr, _io->lastmap);
+  }
   if (_io->io.writable) {
     ftruncate(_io->fd, _io->filesize);
   }
@@ -315,7 +380,7 @@ static size_t mmapio_size(struct ioctx *io) {
   return ret;
 }
 
-struct ioctx *ioctx_mmap_file(const char *fn, int t) {
+struct ioctx *ioctx_mmap_file(const char *fn, int mode) {
   struct mmapioctx *_io = NULL;
   int fd;
   uint8_t *ptr = NULL;
@@ -323,8 +388,10 @@ struct ioctx *ioctx_mmap_file(const char *fn, int t) {
   size_t offset = 0;
   size_t pagesize = sysconf(_SC_PAGESIZE);
   size_t mapsize = (65536 / pagesize) * pagesize;
+  if (mapsize == 0)
+    mapsize = pagesize; // safe fallback
 
-  if (t) {
+  if (mode == IOCTX_MODE_READ) {
     fd = open(fn, O_RDONLY);
   } else {
     fd = open(fn, O_RDWR | O_CREAT | O_TRUNC, 0666); // create decoder
@@ -334,19 +401,33 @@ struct ioctx *ioctx_mmap_file(const char *fn, int t) {
     return NULL;
   }
 
-  if (t) {
+  if (mode == IOCTX_MODE_READ) {
     struct stat sb;
     fstat(fd, &sb);
     filesize = sb.st_size;
     if (filesize < mapsize)
-      mapsize = filesize;
+      mapsize = filesize > 0 ? filesize : 1; // don't mmap 0 bytes
     ptr = mmapio_mmap(mapsize, false, fd, offset);
   } else {
-    ftruncate(fd, mapsize);
+    if (ftruncate(fd, mapsize) != 0) {
+      close(fd);
+      return NULL;
+    }
     ptr = mmapio_mmap(mapsize, true, fd, offset);
   }
 
+  if (!ptr) {
+    close(fd);
+    return NULL;
+  }
+
   _io = (struct mmapioctx *)calloc(1, sizeof(struct mmapioctx));
+  if (!_io) {
+    munmap(ptr, mapsize);
+    close(fd);
+    return NULL;
+  }
+
   _io->fd = fd;
   _io->ptr = ptr;
   _io->filesize = filesize;
@@ -362,7 +443,7 @@ struct ioctx *ioctx_mmap_file(const char *fn, int t) {
   _io->io.tell = mmapio_tell;
   _io->io.destroy = mmapio_destroy;
   _io->io.seekable = true;
-  _io->io.writable = (t == 0);
+  _io->io.writable = (mode == IOCTX_MODE_WRITE);
 
   return (struct ioctx *)_io;
 }
