@@ -25,7 +25,8 @@ t/00util/test_utils
 
 EXAMPLES=\
 examples/encode\
-examples/decode
+examples/decode\
+examples/carousel
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Iinclude -Ideps/
@@ -54,6 +55,7 @@ t/00util/test_utils: t/00util/test_utils.o $(OBJ)
 
 examples/encode: examples/encode.o $(OBJ)
 examples/decode: examples/decode.o $(OBJ)
+examples/carousel: examples/carousel.o $(OBJ)
 
 check: CPPFLAGS=
 check: clean $(TEST_UTILS) $(EXAMPLES)
