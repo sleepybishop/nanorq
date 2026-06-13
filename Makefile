@@ -1,7 +1,5 @@
-OBJ=\
+CORE_OBJ=\
 lib/chooser.o\
-lib/io.o\
-lib/nanorq.o\
 lib/nanorq_core.o\
 lib/ops.o\
 lib/params.o\
@@ -12,6 +10,11 @@ lib/rand.o\
 lib/tuple.o\
 lib/uvec.o\
 deps/obl/oblas_lite.o
+
+OBJ=\
+lib/io.o\
+lib/nanorq.o\
+$(CORE_OBJ)
 
 
 TEST_UTILS=\
@@ -32,7 +35,7 @@ CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Iinclude -Ideps/
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline -fstack-protector-all -Wno-unused -Wno-sequence-point
 
-all: test libnanorq.a $(EXAMPLES)
+all: test libnanorq.a libnanorq_core.a $(EXAMPLES)
 
 test: encode decode
 	$(MAKE) -f example.make
@@ -43,15 +46,15 @@ decode: decode.o libnanorq.a
 
 benchmark: benchmark.o $(OBJ)
 
-benchmark_core: benchmark_core.o $(OBJ)
+benchmark_core: benchmark_core.o $(CORE_OBJ)
 
-t/00util/matgen: t/00util/matgen.o $(OBJ)
-t/00util/repgen: t/00util/repgen.o $(OBJ)
-t/00util/hdpcgen: t/00util/hdpcgen.o $(OBJ)
-t/00util/precond: t/00util/precond.o $(OBJ)
-t/00util/ult: t/00util/ult.o $(OBJ)
-t/00util/schedgen: t/00util/schedgen.o $(OBJ)
-t/00util/test_utils: t/00util/test_utils.o $(OBJ)
+t/00util/matgen: t/00util/matgen.o $(CORE_OBJ)
+t/00util/repgen: t/00util/repgen.o $(CORE_OBJ)
+t/00util/hdpcgen: t/00util/hdpcgen.o $(CORE_OBJ)
+t/00util/precond: t/00util/precond.o $(CORE_OBJ)
+t/00util/ult: t/00util/ult.o $(CORE_OBJ)
+t/00util/schedgen: t/00util/schedgen.o $(CORE_OBJ)
+t/00util/test_utils: t/00util/test_utils.o $(CORE_OBJ)
 
 examples/encode: examples/encode.o $(OBJ)
 examples/decode: examples/decode.o $(OBJ)
@@ -62,12 +65,15 @@ check: clean $(TEST_UTILS) $(EXAMPLES)
 	prove -I. -v t/*.t
 
 check-nolibc: clean
-	$(MAKE) libnanorq.a CPPFLAGS="$(CPPFLAGS) -DNANORQ_NO_LIBC"
+	$(MAKE) libnanorq_core.a CPPFLAGS="$(CPPFLAGS) -DNANORQ_NO_LIBC"
 	$(MAKE) $(TEST_UTILS)
 	prove -I. -v t/10pcmat.t t/20repmat.t t/30precond.t t/35ult.t t/40hdpc.t t/50schedules.t
 
 libnanorq.a: $(OBJ)
 	$(AR) rcs $@ $(OBJ)
+
+libnanorq_core.a: $(CORE_OBJ)
+	$(AR) rcs $@ $(CORE_OBJ)
 
 clean:
 	$(RM) encode decode lib/*.o deps/obl/*.o *.o *.a *.gcda *.gcno *.gcov callgrind.* *.gperf *.prof *.heap perf.data perf.data.old benchmark benchmark_core $(TEST_UTILS) $(EXAMPLES)
@@ -114,9 +120,9 @@ bench-core: benchmark_core
 
 check-embedded:
 	$(MAKE) clean
-	$(MAKE) libnanorq.a CPPFLAGS="$(CPPFLAGS) -DNANORQ_NO_LIBC"
-	@echo "--- Undefined symbols in libnanorq.a ---"
-	@nm -u libnanorq.a | grep -E '\b(malloc|calloc|realloc|free|posix_memalign|__assert_fail)\b' && \
+	$(MAKE) libnanorq_core.a CPPFLAGS="$(CPPFLAGS) -DNANORQ_NO_LIBC"
+	@echo "--- Undefined symbols in libnanorq_core.a ---"
+	@nm -u libnanorq_core.a | grep -E '\b(malloc|calloc|realloc|free|posix_memalign|__assert_fail)\b' && \
 		(echo "FAIL: libc symbols found in embedded build" && exit 1) || \
 		echo "PASS: no libc allocator/assert symbols found"
 
