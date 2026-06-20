@@ -17,6 +17,11 @@ t/00util/hdpcgen
 t/00util/precond
 t/00util/ult
 t/00util/schedgen
+t/00util/test_utils
 t/00util/bounds
+examples/carousel
 .DS_Store
 t/interop_test_dir
+tsnc/examples/blockchain_gossip
+tsnc/examples/tsnc_multipath
+tsnc/examples/tsnc_sync
