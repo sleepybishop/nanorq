@@ -952,14 +952,30 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
       continue;
     }
     repair_sym rs = dec->repair_bin.a[rep_idx++];
+#ifdef NANORQ_USE_UNIFIED_SOLVER
+    if (rs.coefs) {
+      nanorq_core_replace_symbol_explicit(&dec->core, gap, rs.coefs);
+    } else {
+      nanorq_core_replace_symbol(&dec->core, gap, rs.esi);
+    }
+#else
     nanorq_core_replace_symbol(&dec->core, gap, rs.esi);
+#endif
     nanorq_core_place_symbol(&dec->core, dec->D, dec->stride, gap, rs.row,
                              rq->common.T);
   }
 
   for (size_t extra = 0; extra < overhead; extra++) {
     repair_sym rs = dec->repair_bin.a[rep_idx++];
+#ifdef NANORQ_USE_UNIFIED_SOLVER
+    if (rs.coefs) {
+      nanorq_core_replace_symbol_explicit(&dec->core, dec->core.P.Kprime + extra, rs.coefs);
+    } else {
+      nanorq_core_replace_symbol(&dec->core, dec->core.P.Kprime + extra, rs.esi);
+    }
+#else
     nanorq_core_replace_symbol(&dec->core, dec->core.P.Kprime + extra, rs.esi);
+#endif
     nanorq_core_place_symbol(&dec->core, dec->D, dec->stride,
                              dec->core.P.Kprime + extra, rs.row, rq->common.T);
   }
@@ -968,9 +984,11 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
     return false;
   }
 
+#ifndef NANORQ_USE_UNIFIED_SOLVER
   if (has_recoded) {
     return nanorq_repair_block_recoded(rq, dec, sbn, io);
   }
+#endif
 
   dec->work_len = nanorq_core_calculate_work_memory(&dec->core);
   dec->work_mem = (uint8_t *)malloc(dec->work_len);
