@@ -56,7 +56,11 @@ size_t nanorq_core_calculate_prepare_memory(nanorq_core *rq) {
   /* AT */
   mem += (P->L) * sizeof(u32_vec);
   mem += (mem - memb4a) + P->L * PAD_MEM(sizeof(u32));
-
+  /* field maps */
+  mem += 2 * PAD_MEM(sizeof(u32) * (P->L + rq->overhead));
+  /* HDPC */
+  u32 rows = P->L + rq->overhead;
+  mem += PAD_MEM(rows * ((P->L + 31) & ~31));
   return (size_t)mem;
 }
 
@@ -85,6 +89,10 @@ static bool assign_prepare_memory(nanorq_core *rq, u8 *mem, size_t len) {
     return false;
   if (!u32_vec_init(&W->nz, a, W->rows, W->rows, 0))
     return false;
+  if (!u32_vec_init(&W->F.rowmap, a, W->rows, W->rows, 0))
+    return false;
+  if (!u32_vec_init(&W->F.type, a, W->rows, W->rows, 0))
+    return false;
 
   W->NZT = alloc_array(a, u32_vec, 3);
   if (!W->NZT)
@@ -105,6 +113,18 @@ static bool assign_prepare_memory(nanorq_core *rq, u8 *mem, size_t len) {
 
   W->AT = alloc_array(a, u32_vec, W->cols);
   if (!W->AT)
+    return false;
+
+  for (u32 row = P->S; row < P->S + P->H; row++) {
+    uv_A(W->F.type, row) = 1;
+    uv_A(W->F.rowmap, row) = row - P->S;
+  }
+  W->F.used = P->H;
+  W->F.max = W->rows;
+
+  u32 k_aligned = (P->L + 31) & ~31;
+  u32 tmp = W->rows * k_aligned;
+  if (!u8_vec_init(&W->HDPC, a, tmp, tmp, k_aligned))
     return false;
 
   W->cb.on_choose_arg = 0x0;
@@ -182,12 +202,8 @@ size_t nanorq_core_calculate_work_memory(nanorq_core *rq) {
   /* U */
   u32 u_stride = DC(max_u, 32);
   mem += PAD_MEM(rows * sizeof(u32) * u_stride);
-  /* field maps */
-  mem += 2 * PAD_MEM(sizeof(u32) * rows);
   /* UL */
-  mem += PAD_MEM(2 * P->H * (u_stride * 32));
-  /* HDPC */
-  mem += PAD_MEM(P->H * ((P->Kprime + P->S + 31) & ~31));
+  mem += PAD_MEM(rows * (u_stride * 32));
   /* add w->a to bump allocator */
   mem += PAD_MEM(P->Kprime + P->S);
   return (size_t)mem;
@@ -208,20 +224,12 @@ static bool assign_work_memory(nanorq_core *rq, u8 *mem, size_t len) {
   tmp = W->rows * u_stride;
   if (!u32_vec_init(&W->U, a, tmp, tmp, u_stride))
     return false;
-  if (!u32_vec_init(&W->F.rowmap, a, W->rows, W->rows, 0))
-    return false;
-  if (!u32_vec_init(&W->F.type, a, W->rows, W->rows, 0))
-    return false;
 
   u32 u_aligned = u_stride * 32;
-  tmp = 2 * P->H * u_aligned;
+  tmp = W->rows * u_aligned;
   if (!u8_vec_init(&W->UL, a, tmp, tmp, u_aligned))
     return false;
 
-  u32 k_aligned = (P->Kprime + P->S + 31) & ~31;
-  tmp = P->H * k_aligned;
-  if (!u8_vec_init(&W->HDPC, a, tmp, tmp, k_aligned))
-    return false;
   return true;
 }
 
@@ -251,4 +259,45 @@ void nanorq_core_set_choose_callback(nanorq_core *rq, void *arg,
 void nanorq_core_init_matrix(nanorq_core *rq, uint8_t *D, uint32_t stride) {
   uint32_t rows = nanorq_core_get_pc_rows(rq);
   memset(D, 0, (size_t)rows * stride);
+}
+void nanorq_core_replace_symbol_explicit(nanorq_core *rq, uint32_t row,
+                                         const uint8_t *coefs) {
+  params *P = &rq->P;
+  pc *W = &rq->W;
+  row += P->H + P->S;
+
+  if (row >= W->rows) {
+    return;
+  }
+
+  uv_clear(W->A[row]);
+
+  if (uv_A(W->F.type, row) == 0) {
+    uv_A(W->F.type, row) = 1;
+    uv_A(W->F.rowmap, row) = W->F.used;
+    W->F.used++;
+  }
+
+  u32 row_map = uv_A(W->F.rowmap, row);
+  for (u32 j = 0; j < P->L; j++) {
+    uv_E(W->HDPC, row_map, j) = 0;
+  }
+
+  for (u32 i = 0; i < P->K; i++) {
+    if (coefs[i] == 0)
+      continue;
+
+    u32 X = i;
+    u32 cols[GENC_MAX];
+    u32_vec src_row;
+    src_row.a = cols;
+    src_row.n = 0;
+    src_row.m = GENC_MAX;
+    params_set_idxs(P, X, &src_row);
+
+    for (u32 it = 0; it < uv_size(src_row); it++) {
+      u32 col = uv_A(src_row, it);
+      uv_E(W->HDPC, row_map, col) ^= coefs[i];
+    }
+  }
 }

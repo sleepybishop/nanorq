@@ -1,4 +1,6 @@
 #include "precode.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 #define hf_at(W, i, j)                                                         \
   (uv_A((W)->F.type, (i)) ? uv_E((W)->UL, uv_A((W)->F.rowmap, (i)), (j))       \
@@ -99,10 +101,21 @@ static void precode_matrix_init_pv(pc *W) {
 }
 
 static void precode_matrix_sort(params *P, pc *W) {
-  for (u32 row = 0; row < W->rows; row++) /* move HDPC to bottom */
-    uv_A(W->d, row) = (row + P->S + P->H) % W->rows;
-  for (u32 i = 0; i < W->rows; i++)
+  u32 top = 0;
+  u32 bottom = W->rows - W->F.used;
+  for (u32 row = 0; row < W->rows; row++) {
+    u32 actual_row = (row + P->S + P->H) % W->rows;
+    if (uv_A(W->F.type, actual_row)) {
+      uv_A(W->d, bottom) = actual_row;
+      bottom++;
+    } else {
+      uv_A(W->d, top) = actual_row;
+      top++;
+    }
+  }
+  for (u32 i = 0; i < W->rows; i++) {
     uv_A(W->di, uv_A(W->d, i)) = i;
+  }
 }
 
 void precode_matrix_on_op(void *arg, u32 i, u32 j, u8 u) {}
@@ -155,7 +168,7 @@ static void precode_matrix_update_nnz(pc *W, u32 V0, u32 Vcols, u32 r) {
 }
 
 static void precode_matrix_precond(params *P, pc *W) {
-  u32 i = 0, u = P->P, Srows = W->rows - P->H;
+  u32 i = 0, u = P->P, Srows = W->rows - W->F.used;
 
   for (u32 row = 0; row < Srows; row++) {
     u32 drow = uv_A(W->d, row);
@@ -245,24 +258,24 @@ static void hf_axpy(pc *W, u32 i, u32 j, u8 beta) {
 
 static void precode_matrix_fill_HDPC(params *P, pc *W) {
   precode_matrix_make_HDPC(P, W);
-  for (u32 row = 0; row < P->H; row++) {
-    for (u32 col = 0; col < W->u - P->H; col++)
+  for (u32 row = 0; row < W->F.used; row++) {
+    for (u32 col = 0; col < W->u; col++)
       uv_E(W->UL, row, col) = uv_E(W->HDPC, row, uv_A(W->c, P->L - W->u + col));
-    uv_E(W->UL, row, row + W->u - P->H) = 1; /* init I_H */
+    if (row < P->H)
+      uv_E(W->UL, row, row + W->u - P->H) = 1; /* init I_H */
   }
-  for (u32 row = P->S; row < P->S + P->H; row++) {
-    uv_A(W->F.type, row) = 1;
-    uv_A(W->F.rowmap, row) = row - P->S;
-  }
-  W->F.used = P->H;
-  W->F.max = 2 * P->H;
   for (u32 row = 0; row < W->i; row++) {
     u32 crow = uv_A(W->c, row), drow = uv_A(W->d, row);
-    for (u32 h = 0, del_row = W->rows - P->H; h < P->H; h++, del_row++) {
-      u8 beta = uv_E(W->HDPC, h, crow);
-      if (beta) {
-        hf_axpy(W, uv_A(W->d, del_row), drow, beta);
-        W->cb.on_op(W->cb.on_op_arg, uv_A(W->d, del_row), drow, beta);
+    for (u32 del_row = W->rows - W->F.used; del_row < W->rows; del_row++) {
+      u32 phys_row = uv_A(W->d, del_row);
+      if (uv_A(W->F.type, phys_row)) {
+        u8 beta = uv_E(W->HDPC, uv_A(W->F.rowmap, phys_row), crow);
+        if (beta) {
+          W->cb.on_op(W->cb.on_op_arg, phys_row, drow, beta);
+          u8 *a = (u8 *)&uv_E(W->UL, uv_A(W->F.rowmap, phys_row), 0);
+          u32 *b = &uv_E(W->U, drow, 0);
+          nanorq_oblas.axpyb32(a, b, beta, W->u);
+        }
       }
     }
   }
@@ -272,11 +285,11 @@ static void precode_matrix_make_U(params *P, pc *W) {
   precode_matrix_fill_U(W);
   precode_matrix_fwd_GE(W, 0, W->i);
   W->cb.on_op(W->cb.on_op_arg, 0, 0, 0);
-  precode_matrix_fwd_GE(W, W->i - 1, W->rows - P->H);
+  precode_matrix_fwd_GE(W, W->i - 1, W->rows - W->F.used);
 }
 
 static int precode_matrix_solve_gf2(params *P, pc *W) {
-  u32 row, nzrow, rows = W->rows - P->H;
+  u32 row, nzrow, rows = W->rows - W->F.used;
   for (row = W->i; row < P->L; row++) {
     u32 col = row - W->i;
     u32 drow = uv_A(W->d, row);
@@ -367,14 +380,15 @@ int precode_matrix_invert(params *P, pc *W) {
   precode_matrix_make_U(P, W);
 
   u32 rank = 0;
-  if ((W->rows - P->H) >= P->L)
+  if ((W->rows - W->F.used) >= P->L)
     rank = precode_matrix_solve_gf2(P, W);
 
   if (rank < P->L) {
     precode_matrix_fill_HDPC(P, W);
     rank = precode_matrix_solve_gf256(P, W);
-    if (rank < P->L)
+    if (rank < P->L) {
       return 0;
+    }
   }
   W->cb.on_op(W->cb.on_op_arg, 0, 0, 0);
   precode_matrix_backsolve(P, W);

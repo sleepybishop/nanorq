@@ -27,6 +27,8 @@ uint32_t nanorq_core_get_packet_mix(nanorq_core *rq, uint32_t esi,
 
 /* replace symbols in rq matrix for given row */
 void nanorq_core_replace_symbol(nanorq_core *rq, u32 row, u32 esi);
+void nanorq_core_replace_symbol_explicit(nanorq_core *rq, u32 row,
+                                         const uint8_t *coefs);
 
 /* patch the matrix after symbol replacements */
 bool nanorq_core_patch_matrix(nanorq_core *rq);

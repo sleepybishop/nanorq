@@ -1,4 +1,5 @@
 #include "nanorq_ops.h"
+#include <stdio.h>
 
 static void ops_apply_schedule(uint8_t *D, uint32_t stride, schedule *S) {
   sched_op *ops = S->ops.a;
@@ -98,8 +99,8 @@ void ops_mix(nanorq_core *rq, uint8_t *D, uint32_t stride, u32 esi, u8 *ptr) {
 }
 
 size_t ops_estimate_schedule_bytes(uint32_t K) {
-  /* allocate 40 * k + 1000 to conservatively bound schedule length. */
-  size_t estimated_ops = 40 * (size_t)K + 1000;
+  /* allocate more to conservatively bound schedule length for dense rows. */
+  size_t estimated_ops = 400 * (size_t)K + 100000;
   return estimated_ops * sizeof(sched_op);
 }
 
