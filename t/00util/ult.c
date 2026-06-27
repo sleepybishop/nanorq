@@ -42,9 +42,18 @@ int main(int argc, char *argv[]) {
 
   size_t prep_len = nanorq_core_calculate_prepare_memory(&rq);
   uint8_t *prep_mem = (uint8_t *)malloc(prep_len);
+  if (!prep_mem) {
+    fprintf(stderr, "failed to allocate memory\n");
+    return -1;
+  }
   nanorq_core_prepare(&rq, prep_mem, prep_len);
   size_t work_len = nanorq_core_calculate_work_memory(&rq);
   uint8_t *work_mem = (uint8_t *)malloc(work_len);
+  if (!work_mem) {
+    fprintf(stderr, "failed to allocate memory\n");
+    free(prep_mem);
+    return -1;
+  }
   nanorq_core_precalculate(&rq, work_mem, work_len);
   work_matrix_print(&rq.P, &rq.W, stdout);
 
