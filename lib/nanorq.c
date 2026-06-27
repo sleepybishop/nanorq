@@ -33,6 +33,7 @@ struct source_block {
 typedef struct {
   uint32_t esi;
   uint8_t *row;
+  uint8_t *coefs; // Used for TSNC recoded symbols
 } repair_sym;
 
 typedef struct {
@@ -97,6 +98,9 @@ static void repair_vec_free(repair_vec *v) {
   if (v->a) {
     for (size_t i = 0; i < v->n; i++) {
       obl_free(v->a[i].row);
+      if (v->a[i].coefs) {
+        obl_free(v->a[i].coefs);
+      }
     }
     free(v->a);
   }
@@ -631,7 +635,7 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
     transfer_esi(rq, sbn, esi, dec->K, (uint8_t *)data, rq->common.T, io, 1);
     compat_bitmask_set(&dec->repair_mask, esi);
   } else {
-    repair_sym rs;
+    repair_sym rs = {0};
     rs.esi = esi;
     rs.row = (uint8_t *)obl_alloc(1, dec->stride, nanorq_oblas.align_size);
     memcpy(rs.row, data, rq->common.T);
@@ -639,6 +643,133 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
   }
 
   return NANORQ_SYM_ADDED;
+}
+
+int nanorq_decoder_add_recoded_symbol(nanorq *rq, void *data, uint32_t tag,
+                                      const uint8_t *coefs, struct ioctx *io) {
+  uint8_t sbn = (tag >> 24) & 0xff;
+  uint32_t esi = (tag & 0x00ffffff);
+
+  struct block_encoder *dec = get_block_encoder(rq, sbn);
+  if (dec == NULL || esi >= (1 << 24) || esi > rq->max_esi || !coefs)
+    return NANORQ_SYM_ERR;
+
+  if (compat_bitmask_gaps(&dec->repair_mask, dec->K) == 0) {
+    return NANORQ_SYM_IGN;
+  }
+
+  for (size_t i = 0; i < dec->repair_bin.n; i++) {
+    if (dec->repair_bin.a[i].esi == esi) {
+      return NANORQ_SYM_DUP;
+    }
+  }
+
+  if (!dec->D) {
+    if (!nanorq_core_encoder_new(dec->K, 0, &dec->core)) {
+      return NANORQ_SYM_ERR;
+    }
+    u32 rows = nanorq_core_get_pc_rows(&dec->core);
+    dec->stride = nanorq_core_recommended_stride(rq->common.T);
+    dec->D = (uint8_t *)obl_alloc(rows, dec->stride, nanorq_oblas.align_size);
+    nanorq_core_init_matrix(&dec->core, dec->D, dec->stride);
+  }
+
+  repair_sym rs;
+  rs.esi = esi;
+  rs.row = (uint8_t *)obl_alloc(1, dec->stride, nanorq_oblas.align_size);
+  memcpy(rs.row, data, rq->common.T);
+
+  uint32_t coefs_stride = nanorq_core_recommended_stride(dec->K);
+  rs.coefs = (uint8_t *)obl_alloc(1, coefs_stride, nanorq_oblas.align_size);
+  memcpy(rs.coefs, coefs, dec->K);
+
+  repair_vec_push(&dec->repair_bin, rs);
+
+  return NANORQ_SYM_ADDED;
+}
+
+#include "rand.h"
+#include "tuple.h"
+extern const u32 degree_dist[];
+extern const u16 degree_dist_size;
+
+static uint32_t nanorq_deg(uint32_t v, uint32_t K) {
+  for (uint32_t d = 0; d < degree_dist_size; d++) {
+    if (v < degree_dist[d]) {
+      return (d < K) ? d : K;
+    }
+  }
+  return K;
+}
+
+bool nanorq_generate_recoded_symbol(nanorq *rq, struct ioctx *io, uint8_t sbn,
+                                    uint32_t esi, uint8_t *out_coefs,
+                                    void *out_payload) {
+  if (!rq || !out_coefs || !out_payload)
+    return false;
+
+  struct block_encoder *enc = get_block_encoder(rq, sbn);
+  if (!enc)
+    return false;
+
+  memset(out_coefs, 0, enc->K);
+  memset(out_payload, 0, rq->common.T);
+
+  if (io) {
+    /* sparse initial encode (acts as source node) */
+    uint32_t v = rnd_get(esi, 0, 1048576);
+    uint32_t d = nanorq_deg(v, enc->K);
+    if (d == 0)
+      d = 1;
+
+    uint32_t a = 1 + rnd_get(esi, 1, enc->K - 1);
+    uint32_t b = rnd_get(esi, 2, enc->K);
+
+    for (uint32_t j = 0; j < d; j++) {
+      uint32_t idx = b % enc->K;
+      uint8_t coef;
+
+      if (rnd_get(esi, 3 + j, 100) < 90) {
+        coef = 1;
+      } else {
+        coef = rnd_get(esi, 3 + j, 254) + 2; /* [2, 255] */
+      }
+
+      out_coefs[idx] = coef;
+      b = (b + a) % enc->K;
+    }
+
+    for (uint32_t i = 0; i < enc->K; i++) {
+      if (out_coefs[i] > 0) {
+        uint8_t *tmp = malloc(rq->common.T);
+        io->seek(io, i * rq->common.T);
+        io->read(io, tmp, rq->common.T);
+        nanorq_oblas.axpy((uint8_t *)out_payload, tmp, out_coefs[i],
+                          rq->common.T);
+        free(tmp);
+      }
+    }
+  } else {
+    /* dense network recode */
+    for (size_t i = 0; i < enc->repair_bin.n; i++) {
+      uint8_t c;
+      int r = rand() % 100;
+      if (r < 80) {
+        c = 1;
+      } else if (r < 90) {
+        c = 0;
+      } else {
+        c = (rand() % 254) + 2;
+      }
+
+      if (c > 0) {
+        nanorq_oblas.axpy(out_coefs, enc->repair_bin.a[i].coefs, c, enc->K);
+        nanorq_oblas.axpy((uint8_t *)out_payload, enc->repair_bin.a[i].row, c,
+                          rq->common.T);
+      }
+    }
+  }
+  return true;
 }
 
 size_t nanorq_num_missing(nanorq *rq, uint8_t sbn) {
@@ -661,10 +792,107 @@ uint32_t nanorq_tag(uint8_t sbn, uint32_t esi) {
   return ret;
 }
 
+static bool nanorq_repair_block_recoded(nanorq *rq, struct block_encoder *dec,
+                                        uint8_t sbn, struct ioctx *io) {
+  uint32_t coefs_stride = nanorq_core_recommended_stride(dec->K);
+  uint8_t *matrix =
+      (uint8_t *)obl_alloc(dec->K, coefs_stride, nanorq_oblas.align_size);
+  uint8_t *payloads =
+      (uint8_t *)obl_alloc(dec->K, dec->stride, nanorq_oblas.align_size);
+  bool *pivot_flags = calloc(dec->K, sizeof(bool));
+
+  uint32_t rank = 0;
+
+  for (size_t p = 0; p < dec->repair_bin.n && rank < dec->K; p++) {
+    repair_sym *rs = &dec->repair_bin.a[p];
+    if (!rs->coefs)
+      continue;
+
+    uint8_t *cur_coef = malloc(coefs_stride);
+    memcpy(cur_coef, rs->coefs, coefs_stride);
+    uint8_t *cur_payload = malloc(dec->stride);
+    memcpy(cur_payload, rs->row, dec->stride);
+
+    /* fully reduce against existing pivots */
+    for (uint32_t i = 0; i < dec->K; i++) {
+      if (cur_coef[i] != 0 && pivot_flags[i]) {
+        uint8_t mult = cur_coef[i];
+        nanorq_oblas.axpy(cur_coef, matrix + i * coefs_stride, mult, dec->K);
+        nanorq_oblas.axpy(cur_payload, payloads + i * dec->stride, mult,
+                          rq->common.T);
+      }
+    }
+
+    /* find the new pivot element */
+    int new_pivot = -1;
+    for (uint32_t i = 0; i < dec->K; i++) {
+      if (cur_coef[i] != 0) {
+        new_pivot = i;
+        break;
+      }
+    }
+
+    if (new_pivot != -1) {
+      uint32_t i = new_pivot;
+      uint8_t inv = GF2_8_INV[cur_coef[i]];
+      nanorq_oblas.scal(cur_coef, inv, dec->K);
+      nanorq_oblas.scal(cur_payload, inv, rq->common.T);
+
+      /* eliminate new pivot from established rows */
+      for (uint32_t j = 0; j < dec->K; j++) {
+        if (j == i)
+          continue;
+        if (pivot_flags[j] && matrix[j * coefs_stride + i] != 0) {
+          uint8_t mult = matrix[j * coefs_stride + i];
+          nanorq_oblas.axpy(matrix + j * coefs_stride, cur_coef, mult, dec->K);
+          nanorq_oblas.axpy(payloads + j * dec->stride, cur_payload, mult,
+                            rq->common.T);
+        }
+      }
+
+      /* lock row in the matrix */
+      memcpy(matrix + i * coefs_stride, cur_coef, coefs_stride);
+      memcpy(payloads + i * dec->stride, cur_payload, dec->stride);
+      pivot_flags[i] = true;
+      rank++;
+    }
+    free(cur_coef);
+    free(cur_payload);
+  }
+
+  if (rank == dec->K) {
+    /* Solved! Write out the missing symbols using the diagonalized payloads */
+    for (size_t gap = 0; gap < dec->K; gap++) {
+      if (!compat_bitmask_check(&dec->repair_mask, gap)) {
+        transfer_esi(rq, sbn, gap, dec->K, payloads + gap * dec->stride,
+                     rq->common.T, io, 1);
+        compat_bitmask_set(&dec->repair_mask, gap);
+      }
+    }
+    obl_free(matrix);
+    obl_free(payloads);
+    free(pivot_flags);
+    return true;
+  }
+
+  obl_free(matrix);
+  obl_free(payloads);
+  free(pivot_flags);
+  return false;
+}
+
 bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   struct block_encoder *dec = get_block_encoder(rq, sbn);
   if (dec == NULL)
     return false;
+
+  bool has_recoded = false;
+  for (size_t i = 0; i < dec->repair_bin.n; i++) {
+    if (dec->repair_bin.a[i].coefs) {
+      has_recoded = true;
+      break;
+    }
+  }
 
   size_t num_gaps = compat_bitmask_gaps(&dec->repair_mask, dec->K);
   if (num_gaps == 0) {
@@ -727,6 +955,10 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
 
   if (!nanorq_core_patch_matrix(&dec->core)) {
     return false;
+  }
+
+  if (has_recoded) {
+    return nanorq_repair_block_recoded(rq, dec, sbn, io);
   }
 
   dec->work_len = nanorq_core_calculate_work_memory(&dec->core);

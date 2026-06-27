@@ -29,7 +29,10 @@ t/00util/test_utils
 EXAMPLES=\
 examples/encode\
 examples/decode\
-examples/carousel
+examples/carousel\
+examples/tsnc_multipath\
+examples/tsnc_sync\
+examples/blockchain_gossip
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Iinclude -Ideps/
@@ -59,6 +62,9 @@ t/00util/test_utils: t/00util/test_utils.o $(CORE_OBJ)
 examples/encode: examples/encode.o $(OBJ)
 examples/decode: examples/decode.o $(OBJ)
 examples/carousel: examples/carousel.o $(OBJ)
+examples/tsnc_multipath: examples/tsnc_multipath.o $(OBJ)
+examples/tsnc_sync: examples/tsnc_sync.o $(OBJ)
+examples/blockchain_gossip: examples/blockchain_gossip.o $(OBJ)
 
 check: CPPFLAGS=
 check: clean $(TEST_UTILS) $(EXAMPLES)
@@ -122,9 +128,11 @@ check-embedded:
 	$(MAKE) clean
 	$(MAKE) libnanorq_core.a CPPFLAGS="$(CPPFLAGS) -DNANORQ_NO_LIBC"
 	@echo "--- Undefined symbols in libnanorq_core.a ---"
-	@nm -u libnanorq_core.a | grep -E '\b(malloc|calloc|realloc|free|posix_memalign|__assert_fail)\b' && \
-		(echo "FAIL: libc symbols found in embedded build" && exit 1) || \
-		echo "PASS: no libc allocator/assert symbols found"
+	@if nm -u libnanorq_core.a | grep -E '\b(malloc|calloc|realloc|free|posix_memalign|__assert_fail)\b'; then \
+		echo "FAIL: libc symbols found in embedded build"; exit 1; \
+	else \
+		echo "PASS: no libc allocator/assert symbols found"; \
+	fi
 
 valgrind: CPPFLAGS=-Wall -Iinclude -Ideps/ -fPIC
 valgrind: CFLAGS = -O0 -g -std=c11

@@ -48,8 +48,20 @@ size_t nanorq_blocks(nanorq *rq);
 // returns the number of symbol rows per sbn block
 size_t nanorq_block_symbols(nanorq *rq, uint8_t sbn);
 
-// returns a compound symbol identifier comprised of sbn and esi
+/*
+ * Tag parsing
+ */
 uint32_t nanorq_tag(uint8_t sbn, uint32_t esi);
+
+/*
+ * TSNC Recoding API
+ */
+int nanorq_decoder_add_recoded_symbol(nanorq *rq, void *data, uint32_t tag,
+                                      const uint8_t *coefs, struct ioctx *io);
+
+bool nanorq_generate_recoded_symbol(nanorq *rq, struct ioctx *io, uint8_t sbn,
+                                    uint32_t esi, uint8_t *out_coefs,
+                                    void *out_payload);
 
 // return the max number of blocks allowed
 size_t nanorq_max_blocks(nanorq *rq);
