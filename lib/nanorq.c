@@ -969,9 +969,11 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
     repair_sym rs = dec->repair_bin.a[rep_idx++];
 #ifdef NANORQ_USE_UNIFIED_SOLVER
     if (rs.coefs) {
-      nanorq_core_replace_symbol_explicit(&dec->core, dec->core.P.Kprime + extra, rs.coefs);
+      nanorq_core_replace_symbol_explicit(&dec->core,
+                                          dec->core.P.Kprime + extra, rs.coefs);
     } else {
-      nanorq_core_replace_symbol(&dec->core, dec->core.P.Kprime + extra, rs.esi);
+      nanorq_core_replace_symbol(&dec->core, dec->core.P.Kprime + extra,
+                                 rs.esi);
     }
 #else
     nanorq_core_replace_symbol(&dec->core, dec->core.P.Kprime + extra, rs.esi);

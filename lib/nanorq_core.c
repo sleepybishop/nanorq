@@ -287,13 +287,8 @@ void nanorq_core_replace_symbol_explicit(nanorq_core *rq, uint32_t row,
     if (coefs[i] == 0)
       continue;
 
-    u32 X = i;
-    u32 cols[GENC_MAX];
-    u32_vec src_row;
-    src_row.a = cols;
-    src_row.n = 0;
-    src_row.m = GENC_MAX;
-    params_set_idxs(P, X, &src_row);
+    u32 src_idx = P->S + P->H + i;
+    u32_vec src_row = W->A[src_idx];
 
     for (u32 it = 0; it < uv_size(src_row); it++) {
       u32 col = uv_A(src_row, it);

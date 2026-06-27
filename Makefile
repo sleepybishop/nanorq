@@ -37,6 +37,7 @@ examples/blockchain_gossip
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Iinclude -Ideps/
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline -fstack-protector-all -Wno-unused -Wno-sequence-point
+CFLAGS  += -DNANORQ_USE_UNIFIED_SOLVER
 
 all: test libnanorq.a libnanorq_core.a $(EXAMPLES)
 

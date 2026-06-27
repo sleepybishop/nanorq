@@ -274,7 +274,7 @@ static void precode_matrix_fill_HDPC(params *P, pc *W) {
           W->cb.on_op(W->cb.on_op_arg, phys_row, drow, beta);
           u8 *a = (u8 *)&uv_E(W->UL, uv_A(W->F.rowmap, phys_row), 0);
           u32 *b = &uv_E(W->U, drow, 0);
-          nanorq_oblas.axpyb32(a, b, beta, W->u);
+          nanorq_oblas.axpyb32(a, b, beta, W->UL.s);
         }
       }
     }
