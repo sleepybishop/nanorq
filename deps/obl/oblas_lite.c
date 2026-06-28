@@ -40,14 +40,6 @@ static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
         *ap ^= gf2_8_mul(u, *bp);
 }
 
-static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
-{
-    (void)b;
-    register u8 *ap = a, *ae = &a[k];
-    for (; ap != ae; ap++)
-        *ap = gf2_8_mul(u, *ap);
-}
-
 static void obl_axiy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 {
     register u8 *ap = a, *ae = &a[k], *bp = b;
@@ -56,21 +48,14 @@ static void obl_axiy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 }
 
 #else
-static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
+static void obl_axpy_ref(u8 *restrict a, u8 *restrict b, u8 u, unsigned k)
 {
     register const u8 *u_row = &GF2_8_MUL[u << 8];
-    register u8 *ap = a, *ae = &a[k], *bp = b;
-    for (; ap != ae; ap++, bp++)
+    register u8 *restrict ap = a;
+    register u8 *ae = &a[k];
+    register const u8 *restrict bp = b;
+    for (; ap < ae; ap++, bp++)
         *ap ^= u_row[*bp];
-}
-
-static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
-{
-    (void)b;
-    register const u8 *u_row = &GF2_8_MUL[u << 8];
-    register u8 *ap = a, *ae = &a[k];
-    for (; ap != ae; ap++)
-        *ap = u_row[*ap];
 }
 
 static void obl_axiy_ref(u8 *a, u8 *b, u8 u, unsigned k)
@@ -137,25 +122,25 @@ static void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
     } while (0)
 
 #define GENERATE_IMPL(suffix, attr, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR)                                    \
-    attr static void obl_axpy_##suffix(u8 *a, u8 *b, u8 u, unsigned k)                                                             \
+    attr static void obl_axpy_##suffix(u8 *restrict a, u8 *restrict b, u8 u, unsigned k)                                           \
     {                                                                                                                              \
         if (u == 1) {                                                                                                              \
-            u8 *ap = a;                                                                                                            \
+            u8 *restrict ap = a;                                                                                                   \
             u8 *ae = a + k;                                                                                                        \
-            const u8 *bp = b;                                                                                                      \
+            const u8 *restrict bp = b;                                                                                             \
             for (; ap < ae; ap++, bp++)                                                                                            \
                 *ap ^= *bp;                                                                                                        \
         } else {                                                                                                                   \
             OBL_SHUF_TEMPLATE(obl_axpy, a, b, VEC_XOR, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR);                \
         }                                                                                                                          \
     }                                                                                                                              \
-    attr static void obl_scal_##suffix(u8 *a, u8 u, unsigned k)                                                                    \
-    {                                                                                                                              \
-        OBL_SHUF_TEMPLATE(obl_scal, a, a, OBL_NOOP, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR);                   \
-    }                                                                                                                              \
     attr static void obl_axiy_##suffix(u8 *a, u8 *b, u8 u, unsigned k)                                                             \
     {                                                                                                                              \
         OBL_SHUF_TEMPLATE(obl_axiy, a, b, OBL_NOOP, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR);                   \
+    }                                                                                                                              \
+    attr static void obl_scal_##suffix(u8 *a, u8 u, unsigned k)                                                                    \
+    {                                                                                                                              \
+        obl_axiy_##suffix(a, a, u, k);                                                                                             \
     }
 
 #if defined(OBLAS_ARCH_X86)
@@ -193,8 +178,8 @@ GENERATE_IMPL(avx2_gfni, __attribute__((target("avx2,gfni"))), __m256i, _mm256_l
     const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                       \
     const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                                                                       \
     const __m256i mask = _mm256_set1_epi8(0x0f);                                                                                   \
-    const __m256i urow_lo = _mm256_broadcastsi128_si256(_mm_loadu_si128((const __m128i *)u_lo));                                   \
-    const __m256i urow_hi = _mm256_broadcastsi128_si256(_mm_loadu_si128((const __m128i *)u_hi))
+    const __m256i urow_lo = _mm256_loadu2_m128i((const __m128i *)u_lo, (const __m128i *)u_lo);                                     \
+    const __m256i urow_hi = _mm256_loadu2_m128i((const __m128i *)u_hi, (const __m128i *)u_hi)
 #define VEC_CORE_avx2_std(bx, res)                                                                                                 \
     __m256i lo_##res = _mm256_and_si256(bx, mask);                                                                                 \
     __m256i hi_##res = _mm256_and_si256(_mm256_srli_epi64(bx, 4), mask);                                                           \
@@ -231,15 +216,16 @@ __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))) static void obl_ax
     __m512i *ap = (__m512i *)a;
     __m512i *ae = (__m512i *)(a + (k & ~63));
     __m512i scatter =
-        _mm512_set_epi32(0x07070707, 0x07070707, 0x06060606, 0x06060606, 0x05050505, 0x05050505, 0x04040404, 0x04040404,
-                         0x03030303, 0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000);
+        _mm512_set_epi32(0x07070707, 0x07070707, 0x06060606, 0x06060606, 0x05050505, 0x05050505, 0x04040404, 0x04040404, 0x03030303,
+                         0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000);
     __m512i cmpmask =
         _mm512_set_epi32(0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010,
                          0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201);
     __m512i up = _mm512_set1_epi8(u);
     unsigned p = 0;
     for (; ap < ae; p += 2, ap++) {
-        __m512i bcast = _mm512_set1_epi64(*(const long long *)(b + p));
+        __m128i low = _mm_loadl_epi64((const __m128i *)(b + p));
+        __m512i bcast = _mm512_broadcastq_epi64(low);
         __m512i ret = _mm512_shuffle_epi8(bcast, scatter);
         ret = _mm512_andnot_si512(ret, cmpmask);
         __mmask64 tmp = _mm512_cmpeq_epi8_mask(ret, _mm512_setzero_si512());
@@ -310,7 +296,9 @@ __attribute__((target("ssse3"))) static void obl_axpyb32_ssse3(u8 *a, u32 *b, u8
     lo_##res = vqtbl1q_u8(urow_lo, lo_##res);                                                                                      \
     hi_##res = vqtbl1q_u8(urow_hi, hi_##res);                                                                                      \
     uint8x16_t res = veorq_u8(lo_##res, hi_##res)
-GENERATE_IMPL(neon, , uint8x16_t, vld1q_u8, vst1q_u8, VEC_INIT_neon, VEC_CORE_neon, veorq_u8)
+#define VEC_LOAD_neon(ptr) vld1q_u8((const uint8_t *)(ptr))
+#define VEC_STORE_neon(ptr, val) vst1q_u8((uint8_t *)(ptr), val)
+GENERATE_IMPL(neon, , uint8x16_t, VEC_LOAD_neon, VEC_STORE_neon, VEC_INIT_neon, VEC_CORE_neon, veorq_u8)
 
 static void obl_axpyb32_neon(u8 *a, u32 *b, u8 u, unsigned k)
 {
@@ -323,8 +311,8 @@ static void obl_axpyb32_neon(u8 *a, u32 *b, u8 u, unsigned k)
     unsigned p = 0;
     for (; ap < ae; p++) {
         uint8x16_t bcast = vreinterpretq_u8_u32(vdupq_n_u32(b[p]));
-        uint8x16_t ret_lo = vceqzq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_lo)));
-        uint8x16_t ret_hi = vceqzq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_hi)));
+        uint8x16_t ret_lo = vceqq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_lo)), vdupq_n_u8(0));
+        uint8x16_t ret_hi = vceqq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_hi)), vdupq_n_u8(0));
         ret_lo = vandq_u8(ret_lo, up);
         ret_hi = vandq_u8(ret_hi, up);
         vst1q_u8(ap, veorq_u8(vld1q_u8(ap), ret_lo));
@@ -335,9 +323,92 @@ static void obl_axpyb32_neon(u8 *a, u32 *b, u8 u, unsigned k)
 }
 #endif
 
+#if defined(OBLAS_ARCH_RISCV) && defined(__riscv_vector)
+#include <riscv_vector.h>
+
+static void obl_axpy_rvv(u8 *a, u8 *b, u8 u, unsigned k)
+{
+    if (u == 0) {
+        return;
+    }
+    if (u == 1) {
+        size_t vl;
+        for (unsigned i = 0; i < k; i += vl) {
+            vl = __riscv_vsetvl_e8m1(k - i);
+            vuint8m1_t va = __riscv_vle8_v_u8m1(a + i, vl);
+            vuint8m1_t vb = __riscv_vle8_v_u8m1(b + i, vl);
+            vuint8m1_t res = __riscv_vxor_vv_u8m1(va, vb, vl);
+            __riscv_vse8_v_u8m1(a + i, res, vl);
+        }
+        return;
+    }
+    const u8 *u_lo = GF2_8_SHUF_LO + u * 16;
+    const u8 *u_hi = GF2_8_SHUF_HI + u * 16;
+    vuint8m1_t urow_lo = __riscv_vle8_v_u8m1(u_lo, 16);
+    vuint8m1_t urow_hi = __riscv_vle8_v_u8m1(u_hi, 16);
+    size_t vl;
+    for (unsigned i = 0; i < k; i += vl) {
+        vl = __riscv_vsetvl_e8m1(k - i);
+        vuint8m1_t va = __riscv_vle8_v_u8m1(a + i, vl);
+        vuint8m1_t vb = __riscv_vle8_v_u8m1(b + i, vl);
+        vuint8m1_t indices_lo = __riscv_vand_vx_u8m1(vb, 0x0F, vl);
+        vuint8m1_t indices_hi = __riscv_vsrl_vx_u8m1(vb, 4, vl);
+        vuint8m1_t prod_lo = __riscv_vrgather_vv_u8m1(urow_lo, indices_lo, vl);
+        vuint8m1_t prod_hi = __riscv_vrgather_vv_u8m1(urow_hi, indices_hi, vl);
+        vuint8m1_t prod = __riscv_vxor_vv_u8m1(prod_lo, prod_hi, vl);
+        vuint8m1_t res = __riscv_vxor_vv_u8m1(va, prod, vl);
+        __riscv_vse8_v_u8m1(a + i, res, vl);
+    }
+}
+
+static void obl_axiy_rvv(u8 *a, u8 *b, u8 u, unsigned k)
+{
+    if (u == 0) {
+        size_t vl;
+        for (unsigned i = 0; i < k; i += vl) {
+            vl = __riscv_vsetvl_e8m1(k - i);
+            vuint8m1_t zero = __riscv_vmv_v_x_u8m1(0, vl);
+            __riscv_vse8_v_u8m1(a + i, zero, vl);
+        }
+        return;
+    }
+    if (u == 1) {
+        if (a != b) {
+            size_t vl;
+            for (unsigned i = 0; i < k; i += vl) {
+                vl = __riscv_vsetvl_e8m1(k - i);
+                vuint8m1_t vb = __riscv_vle8_v_u8m1(b + i, vl);
+                __riscv_vse8_v_u8m1(a + i, vb, vl);
+            }
+        }
+        return;
+    }
+    const u8 *u_lo = GF2_8_SHUF_LO + u * 16;
+    const u8 *u_hi = GF2_8_SHUF_HI + u * 16;
+    vuint8m1_t urow_lo = __riscv_vle8_v_u8m1(u_lo, 16);
+    vuint8m1_t urow_hi = __riscv_vle8_v_u8m1(u_hi, 16);
+    size_t vl;
+    for (unsigned i = 0; i < k; i += vl) {
+        vl = __riscv_vsetvl_e8m1(k - i);
+        vuint8m1_t vb = __riscv_vle8_v_u8m1(b + i, vl);
+        vuint8m1_t indices_lo = __riscv_vand_vx_u8m1(vb, 0x0F, vl);
+        vuint8m1_t indices_hi = __riscv_vsrl_vx_u8m1(vb, 4, vl);
+        vuint8m1_t prod_lo = __riscv_vrgather_vv_u8m1(urow_lo, indices_lo, vl);
+        vuint8m1_t prod_hi = __riscv_vrgather_vv_u8m1(urow_hi, indices_hi, vl);
+        vuint8m1_t prod = __riscv_vxor_vv_u8m1(prod_lo, prod_hi, vl);
+        __riscv_vse8_v_u8m1(a + i, prod, vl);
+    }
+}
+
+static void obl_scal_rvv(u8 *a, u8 u, unsigned k)
+{
+    obl_axiy_rvv(a, a, u, k);
+}
+#endif
+
 static void obl_scal_ref_wrapper(u8 *a, u8 u, unsigned k)
 {
-    obl_scal_ref(a, NULL, u, k);
+    obl_axiy_ref(a, a, u, k);
 }
 
 void oblas_get_impl(struct oblas_impl *impl)
@@ -392,6 +463,12 @@ void oblas_get_impl(struct oblas_impl *impl)
     impl->scal = obl_scal_neon;
     impl->axiy = obl_axiy_neon;
     impl->axpyb32 = obl_axpyb32_neon;
+    impl->align_size = 16;
+#elif defined(OBLAS_ARCH_RISCV) && defined(__riscv_vector)
+    impl->axpy = obl_axpy_rvv;
+    impl->scal = obl_scal_rvv;
+    impl->axiy = obl_axiy_rvv;
+    impl->axpyb32 = obl_axpyb32_ref;
     impl->align_size = 16;
 #endif
 }
