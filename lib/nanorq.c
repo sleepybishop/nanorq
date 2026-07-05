@@ -142,13 +142,24 @@ static void compat_bitmask_reset(compat_bitmask *b) {
 
 static size_t compat_bitmask_gaps(compat_bitmask *b, size_t limit) {
   size_t gaps = 0;
-  for (size_t i = 0; i < limit; i++) {
-    if (!compat_bitmask_check(b, i)) {
-      if (gaps == limit)
-        return limit; // prevent overflow warning
-      gaps++;
-    }
+  size_t check_limit = limit < b->size ? limit : b->size;
+  size_t limit_words = check_limit / 32;
+  size_t limit_rem = check_limit % 32;
+
+  for (size_t i = 0; i < limit_words; i++) {
+    gaps += 32 - __builtin_popcount(b->words[i]);
   }
+
+  if (limit_rem > 0) {
+    uint32_t mask = (1U << limit_rem) - 1;
+    uint32_t last_word = b->words[limit_words] & mask;
+    gaps += limit_rem - __builtin_popcount(last_word);
+  }
+
+  if (limit > b->size) {
+    gaps += limit - b->size;
+  }
+
   return gaps;
 }
 
