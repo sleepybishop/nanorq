@@ -100,6 +100,11 @@ perf: clean benchmark
 	perf record -g ./benchmark 1280 50000 5.0
 	pprof -svg ./benchmark perf.data > perf.svg
 
+gperf: LDLIBS += -lprofiler
+gperf: clean benchmark
+	CPUPROFILE=benchmark.prof ./benchmark 1280 50000 5.0
+	pprof -svg ./benchmark benchmark.prof > gperf.svg
+
 ubsan: CC=clang
 ubsan: CFLAGS += -fsanitize=address,undefined,implicit-conversion,integer
 ubsan: LDLIBS += -lubsan
