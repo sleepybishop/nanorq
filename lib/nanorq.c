@@ -464,10 +464,12 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
       if (!nanorq_core_encoder_new(enc->K, 0, &enc->core)) {
         return false;
       }
-      u32 rows = nanorq_core_get_pc_rows(&enc->core);
       enc->stride = nanorq_core_recommended_stride(rq->common.T);
-      enc->D = (uint8_t *)obl_alloc(rows, enc->stride, nanorq_oblas.align_size);
-      nanorq_core_init_matrix(&enc->core, enc->D, enc->stride);
+      enc->D = (uint8_t *)obl_alloc(nanorq_core_get_pc_rows(&enc->core),
+                                    enc->stride, nanorq_oblas.align_size);
+      if (!enc->D) {
+        return false;
+      }
     }
 
     for (int esi = 0; esi < enc->K; esi++) {
@@ -634,10 +636,12 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
     if (!nanorq_core_encoder_new(dec->K, 0, &dec->core)) {
       return NANORQ_SYM_ERR;
     }
-    u32 rows = nanorq_core_get_pc_rows(&dec->core);
     dec->stride = nanorq_core_recommended_stride(rq->common.T);
-    dec->D = (uint8_t *)obl_alloc(rows, dec->stride, nanorq_oblas.align_size);
-    nanorq_core_init_matrix(&dec->core, dec->D, dec->stride);
+    dec->D = (uint8_t *)obl_alloc(nanorq_core_get_pc_rows(&dec->core),
+                                  dec->stride, nanorq_oblas.align_size);
+    if (!dec->D) {
+      return NANORQ_SYM_ERR;
+    }
   }
 
   if (esi < dec->K) {
@@ -682,7 +686,6 @@ int nanorq_decoder_add_recoded_symbol(nanorq *rq, void *data, uint32_t tag,
     u32 rows = nanorq_core_get_pc_rows(&dec->core);
     dec->stride = nanorq_core_recommended_stride(rq->common.T);
     dec->D = (uint8_t *)obl_alloc(rows, dec->stride, nanorq_oblas.align_size);
-    nanorq_core_init_matrix(&dec->core, dec->D, dec->stride);
   }
 
   repair_sym rs;
@@ -720,7 +723,7 @@ bool nanorq_generate_recoded_symbol(nanorq *rq, struct ioctx *io, uint8_t sbn,
     return false;
 
   struct block_encoder *enc = get_block_encoder(rq, sbn);
-  if (!enc)
+  if (!enc || enc->K == 0)
     return false;
 
   memset(out_coefs, 0, enc->K);
@@ -811,6 +814,17 @@ static bool nanorq_repair_block_recoded(nanorq *rq, struct block_encoder *dec,
   uint8_t *payloads =
       (uint8_t *)obl_alloc(dec->K, dec->stride, nanorq_oblas.align_size);
   bool *pivot_flags = calloc(dec->K, sizeof(bool));
+  uint8_t *cur_coef = malloc(coefs_stride);
+  uint8_t *cur_payload = malloc(dec->stride);
+
+  if (!matrix || !payloads || !pivot_flags || !cur_coef || !cur_payload) {
+    obl_free(matrix);
+    obl_free(payloads);
+    free(pivot_flags);
+    free(cur_coef);
+    free(cur_payload);
+    return false;
+  }
 
   uint32_t rank = 0;
 
@@ -819,9 +833,7 @@ static bool nanorq_repair_block_recoded(nanorq *rq, struct block_encoder *dec,
     if (!rs->coefs)
       continue;
 
-    uint8_t *cur_coef = malloc(coefs_stride);
     memcpy(cur_coef, rs->coefs, coefs_stride);
-    uint8_t *cur_payload = malloc(dec->stride);
     memcpy(cur_payload, rs->row, dec->stride);
 
     /* fully reduce against existing pivots */
@@ -867,8 +879,6 @@ static bool nanorq_repair_block_recoded(nanorq *rq, struct block_encoder *dec,
       pivot_flags[i] = true;
       rank++;
     }
-    free(cur_coef);
-    free(cur_payload);
   }
 
   if (rank == dec->K) {
@@ -883,12 +893,16 @@ static bool nanorq_repair_block_recoded(nanorq *rq, struct block_encoder *dec,
     obl_free(matrix);
     obl_free(payloads);
     free(pivot_flags);
+    free(cur_coef);
+    free(cur_payload);
     return true;
   }
 
   obl_free(matrix);
   obl_free(payloads);
   free(pivot_flags);
+  free(cur_coef);
+  free(cur_payload);
   return false;
 }
 
