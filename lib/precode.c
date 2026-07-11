@@ -105,7 +105,12 @@ static void precode_matrix_sort(params *P, pc *W) {
     uv_A(W->di, uv_A(W->d, i)) = i;
 }
 
-void precode_matrix_on_op(void *arg, u32 i, u32 j, u8 u) {}
+void precode_matrix_on_op(void *arg, u32 i, u32 j, u8 u) {
+  (void)arg;
+  (void)i;
+  (void)j;
+  (void)u;
+}
 
 static u32 precode_row_nz_at(pc *W, u32 row, u32 s, u32 e, u32 *at) {
   u32 r = 0, drow = uv_A(W->d, row);
