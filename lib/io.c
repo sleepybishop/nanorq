@@ -1,4 +1,6 @@
+#ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>

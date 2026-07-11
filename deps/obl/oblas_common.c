@@ -1,4 +1,6 @@
+#ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
 #include "oblas_common.h"
 
 #ifndef NANORQ_NO_LIBC
