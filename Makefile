@@ -9,6 +9,7 @@ lib/precode.o\
 lib/rand.o\
 lib/tuple.o\
 lib/uvec.o\
+deps/obl/oblas_common.o\
 deps/obl/oblas_lite.o
 
 OBJ=\

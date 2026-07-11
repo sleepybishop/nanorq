@@ -8,19 +8,30 @@
 #endif
 #include <string.h>
 
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-#define OBLAS_ARCH_X86 1
-#elif defined(__aarch64__) || defined(_M_ARM64) || defined(__arm__) || defined(_M_ARM)
-#define OBLAS_ARCH_ARM 1
-#endif
-
 #if defined(OBLAS_ARCH_X86)
 #include <immintrin.h>
 #include <tmmintrin.h>
 #include "gf2_8_affine_mat.h"
 #endif
 
-#include "gf2_8_mul_table.h"
+static uint8_t GF2_8_MUL[65536];
+static int gf2_8_mul_initialized = 0;
+
+static void oblas_lite_init(void)
+{
+    if (gf2_8_mul_initialized)
+        return;
+    for (int i = 0; i < 256; i++) {
+        for (int j = 0; j < 256; j++) {
+            if (i == 0 || j == 0) {
+                GF2_8_MUL[(i << 8) + j] = 0;
+            } else {
+                GF2_8_MUL[(i << 8) + j] = GF2_8_EXP[GF2_8_LOG[i] + GF2_8_LOG[j]];
+            }
+        }
+    }
+    gf2_8_mul_initialized = 1;
+}
 
 #if defined(OBLAS_TINY)
 static inline uint8_t gf2_8_mul(uint16_t a, uint16_t b)
@@ -281,8 +292,18 @@ __attribute__((target("ssse3"))) static void obl_axpyb32_ssse3(u8 *a, u32 *b, u8
 
 #endif
 
-#if defined(OBLAS_ARCH_ARM) && defined(__ARM_NEON)
+#if defined(OBLAS_ARCH_ARM) && (defined(__ARM_NEON) || defined(_MSC_VER))
 #include <arm_neon.h>
+
+#if !defined(__aarch64__) && !defined(_M_ARM64)
+static inline uint8x16_t vqtbl1q_u8(uint8x16_t tbl, uint8x16_t idx)
+{
+    uint8x8x2_t tbl2;
+    tbl2.val[0] = vget_low_u8(tbl);
+    tbl2.val[1] = vget_high_u8(tbl);
+    return vcombine_u8(vtbl2_u8(tbl2, vget_low_u8(idx)), vtbl2_u8(tbl2, vget_high_u8(idx)));
+}
+#endif
 
 #define VEC_INIT_neon()                                                                                                            \
     const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                       \
@@ -304,9 +325,15 @@ static void obl_axpyb32_neon(u8 *a, u32 *b, u8 u, unsigned k)
 {
     uint8_t *ap = (uint8_t *)a;
     uint8_t *ae = (uint8_t *)(a + (k & ~31));
+#ifdef _MSC_VER
+    const uint8x16_t scatter_hi = {.n128_u8 ={ 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3}};
+    const uint8x16_t scatter_lo = {.n128_u8 ={0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1}};
+    const uint8x16_t cmpmask = {.n128_u8 = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80}};
+#else
     const uint8x16_t scatter_hi = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3};
     const uint8x16_t scatter_lo = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1};
     const uint8x16_t cmpmask = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
+#endif
     const uint8x16_t up = vdupq_n_u8(u);
     unsigned p = 0;
     for (; ap < ae; p++) {
@@ -411,8 +438,16 @@ static void obl_scal_ref_wrapper(u8 *a, u8 u, unsigned k)
     obl_axiy_ref(a, a, u, k);
 }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4113)
+#endif
 void oblas_get_impl(struct oblas_impl *impl)
 {
+    oblas_lite_init();
+#if defined(OBLAS_ARCH_X86) && !defined(_MSC_VER)
+    __builtin_cpu_init();
+#endif
     /* fallback */
     impl->axpy = obl_axpy_ref;
     impl->scal = obl_scal_ref_wrapper;
@@ -458,7 +493,7 @@ void oblas_get_impl(struct oblas_impl *impl)
         impl->axpyb32 = obl_axpyb32_ssse3;
         impl->align_size = 16;
     }
-#elif defined(OBLAS_ARCH_ARM) && defined(__ARM_NEON)
+#elif defined(OBLAS_ARCH_ARM) && (defined(__ARM_NEON) || defined(_MSC_VER))
     impl->axpy = obl_axpy_neon;
     impl->scal = obl_scal_neon;
     impl->axiy = obl_axiy_neon;
@@ -471,67 +506,7 @@ void oblas_get_impl(struct oblas_impl *impl)
     impl->axpyb32 = obl_axpyb32_ref;
     impl->align_size = 16;
 #endif
-}
-
-void obl_swap(u8 *a, u8 *b, unsigned k)
-{
-    register u8 *ap = a, *ae = &a[k], *bp = b;
-    for (; ap < ae; ap++, bp++) {
-        u8 tmp = *ap;
-        *ap = *bp;
-        *bp = tmp;
-    }
-}
-
-#ifndef NANORQ_NO_LIBC
-
-void *obl_alloc(size_t num_rows, size_t row_size, size_t alignment)
-{
-    if (num_rows == 0 || row_size == 0) {
-        return NULL;
-    }
-    size_t stride = row_size;
-    if (alignment > 1) {
-        stride = (row_size + alignment - 1) & ~(alignment - 1);
-    }
-    size_t total_size = num_rows * stride;
-
-    void *ptr = NULL;
-    if (alignment <= 1) {
-        ptr = calloc(num_rows, stride);
-    } else {
-#if defined(_MSC_VER) || defined(__MINGW32__)
-        ptr = _aligned_malloc(total_size, alignment);
-        if (ptr) {
-            memset(ptr, 0, total_size);
-        }
-#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(__posix__)
-        if (posix_memalign(&ptr, alignment, total_size) == 0) {
-            memset(ptr, 0, total_size);
-        } else {
-            ptr = NULL;
-        }
-#else
-        size_t aligned_size = (total_size + alignment - 1) & ~(alignment - 1);
-        ptr = aligned_alloc(alignment, aligned_size);
-        if (ptr) {
-            memset(ptr, 0, aligned_size);
-        }
-#endif
-    }
-    return ptr;
-}
-
-void obl_free(void *ptr)
-{
-    if (!ptr) {
-        return;
-    }
-#if defined(_MSC_VER) || defined(__MINGW32__)
-    _aligned_free(ptr);
-#else
-    free(ptr);
+#ifdef _MSC_VER
+#pragma warning(pop)
 #endif
 }
-
-#endif /* NANORQ_NO_LIBC */
