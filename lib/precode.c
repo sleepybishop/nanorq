@@ -277,7 +277,7 @@ static void precode_matrix_make_U(params *P, pc *W) {
   precode_matrix_fill_U(W);
   precode_matrix_fwd_GE(W, 0, W->i);
   W->cb.on_op(W->cb.on_op_arg, 0, 0, 0);
-  precode_matrix_fwd_GE(W, W->i - 1, W->rows - P->H);
+  precode_matrix_fwd_GE(W, W->i == 0 ? 0 : W->i - 1, W->rows - P->H);
 }
 
 static int precode_matrix_solve_gf2(params *P, pc *W) {
