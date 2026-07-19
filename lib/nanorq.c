@@ -472,10 +472,11 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
       }
     }
 
+    uint8_t *tmp_buf = (uint8_t *)malloc(rq->common.T);
+    if (!tmp_buf)
+      return false;
+
     for (int esi = 0; esi < enc->K; esi++) {
-      uint8_t *tmp_buf = (uint8_t *)malloc(rq->common.T);
-      if (!tmp_buf)
-        return false;
       size_t got =
           transfer_esi(rq, sbn, esi, enc->K, tmp_buf, rq->common.T, io, 0);
       if (got < rq->common.T) {
@@ -483,8 +484,8 @@ bool nanorq_generate_symbols(nanorq *rq, uint8_t sbn, struct ioctx *io) {
       }
       nanorq_core_place_symbol(&enc->core, enc->D, enc->stride, esi, tmp_buf,
                                rq->common.T);
-      free(tmp_buf);
     }
+    free(tmp_buf);
     enc->loaded = true;
   }
 
