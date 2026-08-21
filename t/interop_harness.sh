@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -50,7 +50,7 @@ echo "Building nanorq..."
 echo "Building raptorq_interop..."
 cd raptorq_interop
 [ -f ~/.cargo/env ] && source ~/.cargo/env || true
-cargo build --release 2>&1 | grep -v "^$" | grep -v "Compiling\|Finished\|Locking\|warning" || true
+cargo build --release --quiet
 cd ..
 
 RAPTORQ_INTEROP="raptorq_interop/target/release/raptorq_interop"

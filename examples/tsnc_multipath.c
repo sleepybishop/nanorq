@@ -71,7 +71,8 @@ int main() {
   uint32_t dest_tag_idx = 0;
   while (!has_decoded) {
     /* relay 1 transmits with 30% loss */
-    nanorq_generate_recoded_symbol(relay1, NULL, 0, 0, coef_buf, payload_buf);
+    nanorq_generate_recoded_symbol(relay1, NULL, 0, relay1_tx, coef_buf,
+                                   payload_buf);
     relay1_tx++;
     if ((double)rand() / RAND_MAX > 0.30) {
       uint32_t tag = nanorq_tag(0, dest_tag_idx++);
@@ -89,7 +90,8 @@ int main() {
     }
 
     /* relay 2 transmits with 50% loss */
-    nanorq_generate_recoded_symbol(relay2, NULL, 0, 0, coef_buf, payload_buf);
+    nanorq_generate_recoded_symbol(relay2, NULL, 0, relay2_tx, coef_buf,
+                                   payload_buf);
     relay2_tx++;
     if ((double)rand() / RAND_MAX > 0.50) {
       uint32_t tag = nanorq_tag(0, dest_tag_idx++);

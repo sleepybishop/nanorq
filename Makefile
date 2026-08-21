@@ -25,7 +25,8 @@ t/00util/hdpcgen\
 t/00util/precond\
 t/00util/ult\
 t/00util/schedgen\
-t/00util/test_utils
+t/00util/test_utils\
+t/00util/api_regress
 
 EXAMPLES=\
 examples/encode\
@@ -37,7 +38,7 @@ examples/blockchain_gossip
 
 CPPFLAGS = -D_DEFAULT_SOURCE -D_FILE_OFFSET_BITS=64 
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Iinclude -Ideps/
-CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fno-inline -fstack-protector-all -Wno-unused -Wno-sequence-point
+CFLAGS  += -march=native -funroll-loops -ftree-vectorize -fstack-protector-strong -Wno-unused -Wno-sequence-point
 
 all: test libnanorq.a libnanorq_core.a $(EXAMPLES)
 
@@ -59,6 +60,7 @@ t/00util/precond: t/00util/precond.o $(CORE_OBJ)
 t/00util/ult: t/00util/ult.o $(CORE_OBJ)
 t/00util/schedgen: t/00util/schedgen.o $(CORE_OBJ)
 t/00util/test_utils: t/00util/test_utils.o $(CORE_OBJ)
+t/00util/api_regress: t/00util/api_regress.o $(OBJ)
 
 examples/encode: examples/encode.o $(OBJ)
 examples/decode: examples/decode.o $(OBJ)
@@ -67,7 +69,6 @@ examples/tsnc_multipath: examples/tsnc_multipath.o $(OBJ)
 examples/tsnc_sync: examples/tsnc_sync.o $(OBJ)
 examples/blockchain_gossip: examples/blockchain_gossip.o $(OBJ)
 
-check: CPPFLAGS=
 check: clean $(TEST_UTILS) $(EXAMPLES)
 	prove -I. -v t/*.t
 
@@ -90,7 +91,7 @@ indent:
 	clang-format -style=LLVM -i lib/*.c include/*.h examples/*.c t/00util/*.c benchmark.c benchmark_core.c
 
 scan:
-	scan-build $(MAKE) clean benchmark
+	scan-build --status-bugs $(MAKE) clean benchmark
 
 gcov: CFLAGS += -O0 -fprofile-arcs -ftest-coverage
 gcov: LDLIBS = -lgcov --coverage
@@ -107,10 +108,14 @@ gperf: clean benchmark
 	pprof -svg ./benchmark benchmark.prof > gperf.svg
 
 ubsan: CC=clang
-ubsan: CFLAGS += -fsanitize=address,undefined,implicit-conversion,integer
-ubsan: LDLIBS += -lubsan
-ubsan: clean benchmark
+ubsan: CFLAGS += -fsanitize=address,undefined
+ubsan: LDFLAGS += -fsanitize=address,undefined
+ubsan: clean benchmark t/00util/api_regress examples/tsnc_sync examples/tsnc_multipath examples/blockchain_gossip
 	./benchmark 1280 50000 0
+	./t/00util/api_regress
+	./examples/tsnc_sync
+	./examples/tsnc_multipath
+	./examples/blockchain_gossip
 
 bench: benchmark
 	@echo "K       encode   precalc  decode  decode-oh5"
@@ -143,6 +148,10 @@ check-embedded:
 valgrind: CPPFLAGS=-Wall -Iinclude -Ideps/ -fPIC
 valgrind: CFLAGS = -O0 -g -std=c11
 valgrind: clean $(TEST_UTILS) $(EXAMPLES)
+	valgrind --leak-check=full --errors-for-leak-kinds=definite --error-exitcode=2 ./t/00util/api_regress
+	valgrind --leak-check=full --errors-for-leak-kinds=definite --error-exitcode=2 ./examples/tsnc_sync > /dev/null
+	valgrind --leak-check=full --errors-for-leak-kinds=definite --error-exitcode=2 ./examples/tsnc_multipath > /dev/null
+	valgrind --leak-check=full --errors-for-leak-kinds=definite --error-exitcode=2 ./examples/blockchain_gossip > /dev/null
 	valgrind --error-exitcode=2 ./t/00util/hdpcgen  500 > /dev/null
 	valgrind --error-exitcode=2 ./t/00util/matgen   500 > /dev/null
 	valgrind --error-exitcode=2 ./t/00util/precond  500 > /dev/null

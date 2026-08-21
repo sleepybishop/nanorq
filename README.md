@@ -18,12 +18,20 @@ nanorq is a compact, performant implementation of the raptorq fountain code capa
 ## Helper Modules
 
 ### Tunable Sparse Network Coding (TSNC)
-A helper module under `tsnc/` that implements block-based and sliding window network coding, leveraging the optimized primitives used for `nanorq`.
+The high-level API includes experimental block-based recoding helpers that
+leverage the optimized primitives used for `nanorq`. These helpers are demos,
+not part of the RFC 6330 interoperability surface. Dense TSNC recovery is
+bounded to 256 MiB of coefficient and payload matrix memory and fails cleanly
+when that limit would be exceeded.
 
 Some examples are provided:
   - Blockchain gossip propagation: Accelerating block synchronization across peer-to-peer gossip networks.
   - Multipath recoding: Re-encoding packets at intermediate network hops without full block decoding to maximize throughput.
   - Real-time continuous streaming: Utilizing a sliding window mechanism to recover missing stream data with minimal overhead and latency.
+
+`nanorq` objects cache mutable encoder/decoder state. A single object must not
+be used concurrently without external synchronization; separate objects may be
+used by separate threads.
 
 [^1]: When compiled with `NDEBUG`. Test suite requires stdlib.
 [^2]: Build autodetects and optimizes for the host CPU architecture (using -march=native).
