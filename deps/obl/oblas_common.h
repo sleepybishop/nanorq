@@ -47,6 +47,16 @@ static inline int __builtin_ctz(unsigned int x)
 }
 
 #if defined(OBLAS_ARCH_X86)
+static inline int obl_msvc_xstate_enabled(uint64_t mask)
+{
+    int cpuInfo[4] = {0};
+    __cpuid(cpuInfo, 1);
+    if ((cpuInfo[2] & (1 << 27)) == 0) { /* OSXSAVE */
+        return 0;
+    }
+    return (_xgetbv(0) & mask) == mask;
+}
+
 static inline int __builtin_cpu_supports(const char *feature)
 {
     int cpuInfo[4] = {0};
@@ -59,14 +69,29 @@ static inline int __builtin_cpu_supports(const char *feature)
             return (cpuInfo[2] & (1 << 9)) != 0;
         }
     } else if (strcmp(feature, "avx2") == 0) {
-        if (max_leaf >= 7) {
+        if (max_leaf >= 7 && obl_msvc_xstate_enabled(0x06)) {
             __cpuidex(cpuInfo, 7, 0);
             return (cpuInfo[1] & (1 << 5)) != 0;
         }
     } else if (strcmp(feature, "avx512f") == 0) {
-        if (max_leaf >= 7) {
+        if (max_leaf >= 7 && obl_msvc_xstate_enabled(0xE6)) {
             __cpuidex(cpuInfo, 7, 0);
             return (cpuInfo[1] & (1 << 16)) != 0;
+        }
+    } else if (strcmp(feature, "avx512dq") == 0) {
+        if (max_leaf >= 7 && obl_msvc_xstate_enabled(0xE6)) {
+            __cpuidex(cpuInfo, 7, 0);
+            return (cpuInfo[1] & (1 << 17)) != 0;
+        }
+    } else if (strcmp(feature, "avx512bw") == 0) {
+        if (max_leaf >= 7 && obl_msvc_xstate_enabled(0xE6)) {
+            __cpuidex(cpuInfo, 7, 0);
+            return (cpuInfo[1] & (1 << 30)) != 0;
+        }
+    } else if (strcmp(feature, "avx512vl") == 0) {
+        if (max_leaf >= 7 && obl_msvc_xstate_enabled(0xE6)) {
+            __cpuidex(cpuInfo, 7, 0);
+            return (cpuInfo[1] & (1U << 31)) != 0;
         }
     } else if (strcmp(feature, "gfni") == 0) {
         if (max_leaf >= 7) {

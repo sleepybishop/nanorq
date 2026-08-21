@@ -456,13 +456,17 @@ void oblas_get_impl(struct oblas_impl *impl)
     impl->align_size = sizeof(void *);
 
 #if defined(OBLAS_ARCH_X86)
-    if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("gfni")) {
+    int has_avx512 = __builtin_cpu_supports("avx512f") &&
+                     __builtin_cpu_supports("avx512bw") &&
+                     __builtin_cpu_supports("avx512dq") &&
+                     __builtin_cpu_supports("avx512vl");
+    if (has_avx512 && __builtin_cpu_supports("gfni")) {
         impl->axpy = obl_axpy_avx512_gfni;
         impl->scal = obl_scal_avx512_gfni;
         impl->axiy = obl_axiy_avx512_gfni;
         impl->axpyb32 = obl_axpyb32_avx512;
         impl->align_size = 64;
-    } else if (__builtin_cpu_supports("avx512f")) {
+    } else if (has_avx512) {
         impl->axpy = obl_axpy_avx512_std;
         impl->scal = obl_scal_avx512_std;
         impl->axiy = obl_axiy_avx512_std;
