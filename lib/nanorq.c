@@ -711,6 +711,11 @@ void nanorq_encoder_reset(nanorq *rq, uint8_t sbn) {
   struct block_encoder *enc = rq->encoders[sbn];
   enc->loaded = false;
   enc->inverted = false;
+  if (enc->core.overhead != 0) {
+    nanorq_core base_core = {0};
+    if (nanorq_core_encoder_new(enc->K, 0, &base_core))
+      enc->core = base_core;
+  }
   if (enc->D) {
     nanorq_core_init_matrix(&enc->core, enc->D, enc->stride);
   }
@@ -780,8 +785,9 @@ int nanorq_decoder_add_symbol(nanorq *rq, void *data, uint32_t tag,
     if (transfer_esi(rq, sbn, esi, dec->K, (uint8_t *)data, rq->common.T, io,
                      1) == SIZE_MAX)
       return NANORQ_SYM_ERR;
-    nanorq_core_place_symbol(&dec->core, dec->D, dec->stride, esi,
-                             (const uint8_t *)data, rq->common.T);
+    if (!dec->inverted)
+      nanorq_core_place_symbol(&dec->core, dec->D, dec->stride, esi,
+                               (const uint8_t *)data, rq->common.T);
     compat_bitmask_set(&dec->repair_mask, esi);
   } else {
     repair_sym rs = {0};
@@ -1097,6 +1103,25 @@ out:
   return success;
 }
 
+static bool write_recovered_block(nanorq *rq, struct block_encoder *dec,
+                                  uint8_t sbn, struct ioctx *io,
+                                  uint8_t *recovered) {
+  for (uint32_t gap = 0; gap < dec->K; gap++) {
+    if (compat_bitmask_check(&dec->repair_mask, gap))
+      continue;
+    ops_mix(&dec->core, dec->D, dec->stride, gap, recovered);
+    if (transfer_esi(rq, sbn, gap, dec->K, recovered, rq->common.T, io, 1) ==
+        SIZE_MAX)
+      return false;
+  }
+
+  for (uint32_t gap = 0; gap < dec->K; gap++) {
+    if (!compat_bitmask_check(&dec->repair_mask, gap))
+      compat_bitmask_set(&dec->repair_mask, gap);
+  }
+  return true;
+}
+
 bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   if (!rq || !io || !io->seek || !io->write)
     return false;
@@ -1116,6 +1141,14 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   size_t num_gaps = compat_bitmask_gaps(&dec->repair_mask, dec->K);
   if (num_gaps == 0)
     return true;
+  if (dec->inverted) {
+    uint8_t *recovered = (uint8_t *)malloc(dec->stride);
+    if (!recovered)
+      return false;
+    bool success = write_recovered_block(rq, dec, sbn, io, recovered);
+    free(recovered);
+    return success;
+  }
   if (recoded_count >= num_gaps &&
       nanorq_repair_block_recoded(rq, dec, sbn, io))
     return true;
@@ -1131,19 +1164,31 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   void *sched_mem = NULL;
   uint8_t *recovered = NULL;
   schedule S = {0};
+  bool matrix_modified = false;
   bool success = false;
 
   if (!ensure_block_matrix(dec) ||
       !nanorq_core_encoder_new(dec->K, overhead, &core))
     goto out;
+
   size_t rows = nanorq_core_get_pc_rows(&core);
-  D = (uint8_t *)obl_alloc(rows, dec->stride, nanorq_oblas.align_size);
-  if (!D)
-    goto out;
   size_t base_rows = nanorq_core_get_pc_rows(&dec->core);
   if (base_rows > rows)
     goto out;
+  D = (uint8_t *)obl_alloc(rows, dec->stride, nanorq_oblas.align_size);
+  if (!D)
+    goto out;
   memcpy(D, dec->D, base_rows * dec->stride);
+
+  /*
+   * the replacement matrix is still an exact copy of the canonical decoder
+   * state. adopt it before solver setup so only one large matrix is resident;
+   * failures below restore any temporary repair rows before returning.
+   */
+  uint8_t *old_D = dec->D;
+  dec->D = D;
+  D = NULL;
+  obl_free(old_D);
 
   size_t prep_len = nanorq_core_calculate_prepare_memory(&core);
   prep_mem = (uint8_t *)malloc(prep_len);
@@ -1151,6 +1196,7 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
     goto out;
 
   size_t rep_idx = 0;
+  matrix_modified = true;
   for (uint32_t gap = 0; gap < dec->K; gap++) {
     if (compat_bitmask_check(&dec->repair_mask, gap))
       continue;
@@ -1160,7 +1206,8 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
       goto out;
     repair_sym *rs = &dec->repair_bin.a[rep_idx++];
     nanorq_core_replace_symbol(&core, gap, rs->esi);
-    nanorq_core_place_symbol(&core, D, dec->stride, gap, rs->row, rq->common.T);
+    nanorq_core_place_symbol(&core, dec->D, dec->stride, gap, rs->row,
+                             rq->common.T);
   }
 
   for (uint32_t extra = 0; extra < overhead; extra++) {
@@ -1169,9 +1216,10 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
     if (rep_idx == dec->repair_bin.n)
       goto out;
     repair_sym *rs = &dec->repair_bin.a[rep_idx++];
-    nanorq_core_replace_symbol(&core, core.P.Kprime + extra, rs->esi);
-    nanorq_core_place_symbol(&core, D, dec->stride, core.P.Kprime + extra,
-                             rs->row, rq->common.T);
+    uint32_t row = core.P.Kprime + extra;
+    nanorq_core_replace_symbol(&core, row, rs->esi);
+    nanorq_core_place_symbol(&core, dec->D, dec->stride, row, rs->row,
+                             rq->common.T);
   }
 
   if (!nanorq_core_patch_matrix(&core))
@@ -1180,31 +1228,43 @@ bool nanorq_repair_block(nanorq *rq, struct ioctx *io, uint8_t sbn) {
   size_t sched_bytes = ops_estimate_schedule_bytes(dec->K);
   work_mem = (uint8_t *)malloc(work_len);
   sched_mem = malloc(sched_bytes);
-  if (!work_mem || !schedule_init(&S, sched_mem, sched_bytes))
+  recovered = (uint8_t *)malloc(dec->stride);
+  if (!work_mem || !recovered || !schedule_init(&S, sched_mem, sched_bytes))
     goto out;
   nanorq_core_set_op_callback(&core, &S, ops_push);
   if (!nanorq_core_precalculate(&core, work_mem, work_len) || S.overflowed ||
       S.cpidx != 2)
     goto out;
 
-  ops_run(&core, D, dec->stride, &S);
-  recovered = (uint8_t *)malloc(dec->stride);
-  if (!recovered)
-    goto out;
-  for (uint32_t gap = 0; gap < dec->K; gap++) {
-    if (compat_bitmask_check(&dec->repair_mask, gap))
-      continue;
-    ops_mix(&core, D, dec->stride, gap, recovered);
-    if (transfer_esi(rq, sbn, gap, dec->K, recovered, rq->common.T, io, 1) ==
-        SIZE_MAX)
-      goto out;
-    nanorq_core_place_symbol(&dec->core, dec->D, dec->stride, gap, recovered,
-                             rq->common.T);
-    compat_bitmask_set(&dec->repair_mask, gap);
-  }
-  success = true;
+  free(dec->prep_mem);
+  free(dec->work_mem);
+  free(dec->S.ops.a);
+  dec->core = core;
+  dec->prep_mem = prep_mem;
+  dec->prep_len = prep_len;
+  dec->work_mem = work_mem;
+  dec->work_len = work_len;
+  dec->S = S;
+  prep_mem = NULL;
+  work_mem = NULL;
+  sched_mem = NULL;
+
+  ops_run(&dec->core, dec->D, dec->stride, &dec->S);
+  dec->inverted = true;
+  success = write_recovered_block(rq, dec, sbn, io, recovered);
 
 out:
+  if (matrix_modified && !dec->inverted) {
+    for (uint32_t gap = 0; gap < dec->K; gap++) {
+      if (!compat_bitmask_check(&dec->repair_mask, gap))
+        memset(nanorq_core_get_symbol_ptr(&core, dec->D, dec->stride, gap), 0,
+               dec->stride);
+    }
+    for (uint32_t extra = 0; extra < overhead; extra++)
+      memset(nanorq_core_get_symbol_ptr(&core, dec->D, dec->stride,
+                                        core.P.Kprime + extra),
+             0, dec->stride);
+  }
   free(recovered);
   free(sched_mem);
   free(work_mem);
