@@ -7,5 +7,9 @@ edition = "2021"
 name = "raptorq_interop"
 path = "src/main.rs"
 
+[[bin]]
+name = "bench"
+path = "src/bench.rs"
+
 [dependencies]
 raptorq = "2.0.1"
