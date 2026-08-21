@@ -3,10 +3,50 @@
 #include "tuple.h"
 #include "util.h"
 
+#include <stdatomic.h>
+
 #define ALIGN_VAL(x, align) (((x) + (align) - 1) & ~((align) - 1))
-#define PAD_MEM(x) ALIGN_VAL(x, get_align_size())
 
 struct oblas_impl nanorq_oblas = {.align_size = 32};
+static atomic_uint nanorq_oblas_state = ATOMIC_VAR_INIT(0);
+
+static bool add_bytes(size_t *total, size_t count, size_t unit) {
+  if (count != 0 && unit > SIZE_MAX / count)
+    return false;
+  size_t bytes = count * unit;
+  if (*total > SIZE_MAX - bytes)
+    return false;
+  *total += bytes;
+  return true;
+}
+
+static bool add_padded_bytes(size_t *total, size_t count, size_t unit,
+                             size_t repeats) {
+  size_t align = get_align_size();
+  if (align == 0 || (align & (align - 1)) != 0 ||
+      (count != 0 && unit > SIZE_MAX / count))
+    return false;
+  size_t bytes = count * unit;
+  if (bytes > SIZE_MAX - (align - 1))
+    return false;
+  size_t padded = ALIGN_VAL(bytes, align);
+  return add_bytes(total, repeats, padded);
+}
+
+void nanorq_core_init(void) {
+  unsigned expected = 0;
+  if (atomic_compare_exchange_strong_explicit(&nanorq_oblas_state, &expected, 1,
+                                              memory_order_acq_rel,
+                                              memory_order_acquire)) {
+    struct oblas_impl impl = {.align_size = 32};
+    oblas_get_impl(&impl);
+    nanorq_oblas = impl;
+    atomic_store_explicit(&nanorq_oblas_state, 2, memory_order_release);
+    return;
+  }
+  while (atomic_load_explicit(&nanorq_oblas_state, memory_order_acquire) != 2) {
+  }
+}
 
 /*
  * T: size of each symbol in bytes (should be aligned to Al)
@@ -18,44 +58,72 @@ bool nanorq_core_encoder_new(u32 K, u32 overhead, nanorq_core *rq) {
   if (K < 1 || K > K_max)
     return false;
   rq->P = params_init(K);
+  if (overhead > UINT32_MAX - rq->P.L)
+    return false;
+  uint64_t rows = (uint64_t)rq->P.L + overhead;
+  uint64_t u_stride = DC(rq->P.L, 32);
+  if (rows * u_stride > UINT32_MAX)
+    return false;
   rq->overhead = overhead;
-  oblas_get_impl(&nanorq_oblas);
+  nanorq_core_init();
   return true;
 }
 
 uint32_t nanorq_core_recommended_stride(uint32_t T) {
+  nanorq_core_init();
   uint32_t align = (uint32_t)get_align_size();
+  if (align == 0 || T > UINT32_MAX - (align - 1))
+    return 0;
   uint32_t padded = ALIGN_VAL(T, align);
   /* avoid cache-line aliasing: if padded is an exact multiple of 64, add one
    * alignment unit */
-  if (padded % 64 == 0)
+  if (padded % 64 == 0) {
+    if (padded > UINT32_MAX - align)
+      return 0;
     padded += align;
+  }
   return padded;
 }
 void nanorq_core_place_symbol(nanorq_core *rq, uint8_t *D, uint32_t stride,
                               uint32_t esi, const uint8_t *src, uint32_t T) {
+  if (!rq || !D || !src || T > stride)
+    return;
   uint32_t SH = nanorq_core_get_pc_genc_offset(rq);
+  if (esi > UINT32_MAX - SH || SH + esi >= nanorq_core_get_pc_rows(rq))
+    return;
   uint8_t *dst = D + (SH + esi) * stride;
   memcpy(dst, src, T);
 }
 size_t nanorq_core_calculate_prepare_memory(nanorq_core *rq) {
+  if (!rq)
+    return 0;
   params *P = &rq->P;
-  u32 mem = 0, snz = 3 * DC(P->B, P->S) + 3;
+  size_t mem = 0;
+  u32 snz = 3 * DC(P->B, P->S) + 3;
 
   /* c/ci, d/di & nz/cnz */
-  mem += 3 * PAD_MEM(sizeof(u32) * P->L);
-  mem += 3 * PAD_MEM(sizeof(u32) * (P->L + rq->overhead));
+  if (!add_padded_bytes(&mem, P->L, sizeof(u32), 3) ||
+      !add_padded_bytes(&mem, (size_t)P->L + rq->overhead, sizeof(u32), 3))
+    return 0;
   /* NZT (one empty vec) */
-  mem += 3 * PAD_MEM(sizeof(u32_vec));
-  mem += 2 * PAD_MEM(sizeof(u32) * (P->L + rq->overhead));
+  if (!add_padded_bytes(&mem, 1, sizeof(u32_vec), 3) ||
+      !add_padded_bytes(&mem, (size_t)P->L + rq->overhead, sizeof(u32), 2))
+    return 0;
   /* A */
-  mem += (P->L + rq->overhead) * sizeof(u32_vec);
-  u32 memb4a = mem;
-  mem += P->S * PAD_MEM(snz * sizeof(u32));
-  mem += (P->Kprime + rq->overhead) * PAD_MEM(GENC_MAX * sizeof(u32));
+  if (!add_bytes(&mem, (size_t)P->L + rq->overhead, sizeof(u32_vec)))
+    return 0;
+  size_t memb4a = mem;
+  if (!add_padded_bytes(&mem, snz, sizeof(u32), P->S) ||
+      !add_padded_bytes(&mem, GENC_MAX, sizeof(u32),
+                        (size_t)P->Kprime + rq->overhead))
+    return 0;
   /* AT */
-  mem += (P->L) * sizeof(u32_vec);
-  mem += (mem - memb4a) + P->L * PAD_MEM(sizeof(u32));
+  if (!add_bytes(&mem, P->L, sizeof(u32_vec)))
+    return 0;
+  size_t mirrored = mem - memb4a;
+  if (!add_bytes(&mem, 1, mirrored) ||
+      !add_padded_bytes(&mem, 1, sizeof(u32), P->L))
+    return 0;
 
   return (size_t)mem;
 }
@@ -131,8 +199,11 @@ uint32_t nanorq_core_get_packet_mix(nanorq_core *rq, u32 esi,
     return 0;
   params *P = &rq->P;
   u32 X = esi;
-  if (esi >= P->K)
+  if (esi >= P->K) {
+    if (esi > UINT32_MAX - (P->Kprime - P->K))
+      return 0;
     X += (P->Kprime - P->K);
+  }
   u32_vec mix = {.m = mix_max, .n = 0, .s = 0, .a = mix_idxs};
   params_set_idxs(P, X, &mix);
   return mix.n;
@@ -149,8 +220,11 @@ void nanorq_core_replace_symbol(nanorq_core *rq, u32 row, u32 esi) {
   if (row >= W->rows)
     return;
   u32 X = esi;
-  if (esi >= P->K)
+  if (esi >= P->K) {
+    if (esi > UINT32_MAX - (P->Kprime - P->K))
+      return;
     X += (P->Kprime - P->K);
+  }
   uv_clear(W->A[row]);
   params_set_idxs(P, X, &W->A[row]);
 }
@@ -175,21 +249,28 @@ bool nanorq_core_patch_matrix(nanorq_core *rq) {
 }
 
 size_t nanorq_core_calculate_work_memory(nanorq_core *rq) {
+  if (!rq)
+    return 0;
   params *P = &rq->P;
-  u32 mem = 0;
+  size_t mem = 0;
   u32 max_u = P->L;
   u32 rows = P->L + rq->overhead;
   /* U */
   u32 u_stride = DC(max_u, 32);
-  mem += PAD_MEM(rows * sizeof(u32) * u_stride);
+  if (!add_padded_bytes(&mem, (size_t)rows * u_stride, sizeof(u32), 1))
+    return 0;
   /* field maps */
-  mem += 2 * PAD_MEM(sizeof(u32) * rows);
+  if (!add_padded_bytes(&mem, rows, sizeof(u32), 2))
+    return 0;
   /* UL */
-  mem += PAD_MEM(2 * P->H * (u_stride * 32));
+  if (!add_padded_bytes(&mem, 2U * P->H, (size_t)u_stride * 32, 1))
+    return 0;
   /* HDPC */
-  mem += PAD_MEM(P->H * ((P->Kprime + P->S + 31) & ~31));
+  if (!add_padded_bytes(&mem, P->H, (P->Kprime + P->S + 31U) & ~31U, 1))
+    return 0;
   /* add w->a to bump allocator */
-  mem += PAD_MEM(P->Kprime + P->S);
+  if (!add_padded_bytes(&mem, P->Kprime + P->S, 1, 1))
+    return 0;
   return (size_t)mem;
 }
 
@@ -235,6 +316,8 @@ bool nanorq_core_precalculate(nanorq_core *rq, u8 *work_mem, size_t wm_len) {
 
 void nanorq_core_set_op_callback(nanorq_core *rq, void *arg,
                                  void (*on_op)(void *, u32, u32, u8)) {
+  if (!rq)
+    return;
   pc *W = &rq->W;
   W->cb.on_op_arg = arg;
   W->cb.on_op = on_op;
@@ -243,12 +326,16 @@ void nanorq_core_set_op_callback(nanorq_core *rq, void *arg,
 void nanorq_core_set_choose_callback(nanorq_core *rq, void *arg,
                                      u32 (*on_choose)(void *, pc *, u32, u32,
                                                       u32, u32)) {
+  if (!rq)
+    return;
   pc *W = &rq->W;
   W->cb.on_choose_arg = arg;
   W->cb.on_choose = on_choose;
 }
 
 void nanorq_core_init_matrix(nanorq_core *rq, uint8_t *D, uint32_t stride) {
+  if (!rq || !D || stride == 0)
+    return;
   uint32_t rows = nanorq_core_get_pc_rows(rq);
   memset(D, 0, (size_t)rows * stride);
 }

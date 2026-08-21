@@ -18,6 +18,7 @@ typedef struct {
 typedef struct {
   u32 cp[2];
   u32 cpidx;
+  bool overflowed;
   oplist ops;
 } schedule;
 

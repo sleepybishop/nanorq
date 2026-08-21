@@ -12,6 +12,9 @@ typedef struct {
   u32 overhead;
 } nanorq_core;
 
+/* Thread-safe one-time SIMD implementation selection. */
+void nanorq_core_init(void);
+
 /* returns a new encoder configured with given parameters */
 bool nanorq_core_encoder_new(uint32_t K, uint32_t overhead, nanorq_core *rq);
 

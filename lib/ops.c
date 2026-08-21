@@ -67,15 +67,22 @@ void ops_push(void *arg, u32 i, u32 j, u8 u) {
   if (i == 0 && j == 0 && u == 0) {
     if (S->cpidx < 2) {
       S->cp[S->cpidx++] = S->ops.n;
+    } else {
+      S->overflowed = true;
     }
   } else {
     if (S->ops.n < S->ops.m) {
       S->ops.a[S->ops.n++] = op;
+    } else {
+      S->overflowed = true;
     }
   }
 }
 
 void ops_run(nanorq_core *rq, uint8_t *D, uint32_t stride, schedule *S) {
+  if (!rq || !D || stride == 0 || !S || !S->ops.a || S->cpidx != 2 ||
+      S->overflowed)
+    return;
   ops_apply_schedule(D, stride, S);
   u32 rows = nanorq_core_get_pc_rows(rq);
   u32 cols = nanorq_core_get_pc_cols(rq);
@@ -86,6 +93,8 @@ void ops_run(nanorq_core *rq, uint8_t *D, uint32_t stride, schedule *S) {
 }
 
 void ops_mix(nanorq_core *rq, uint8_t *D, uint32_t stride, u32 esi, u8 *ptr) {
+  if (!rq || !D || stride == 0 || !ptr)
+    return;
   uint32_t mix[GENC_MAX];
   uint32_t num = nanorq_core_get_packet_mix(rq, esi, mix, GENC_MAX);
 
@@ -99,12 +108,16 @@ void ops_mix(nanorq_core *rq, uint8_t *D, uint32_t stride, u32 esi, u8 *ptr) {
 
 size_t ops_estimate_schedule_bytes(uint32_t K) {
   /* allocate 40 * k + 1000 to conservatively bound schedule length. */
+  if ((size_t)K > (SIZE_MAX - 1000) / 40)
+    return 0;
   size_t estimated_ops = 40 * (size_t)K + 1000;
+  if (estimated_ops > SIZE_MAX / sizeof(sched_op))
+    return 0;
   return estimated_ops * sizeof(sched_op);
 }
 
 bool schedule_init(schedule *S, void *buf, size_t buf_bytes) {
-  if (!buf || buf_bytes < sizeof(sched_op))
+  if (!S || !buf || buf_bytes < sizeof(sched_op))
     return false;
   *S = (schedule){0};
   S->ops.a = (sched_op *)buf;
@@ -120,11 +133,20 @@ bool schedule_init(schedule *S, void *buf, size_t buf_bytes) {
 
 void nanorq_core_get_memory_reqs(uint32_t K, uint32_t overhead, uint32_t stride,
                                  struct nanorq_core_mem_reqs *reqs) {
-  nanorq_core rq;
-  nanorq_core_encoder_new(K, overhead, &rq);
+  if (!reqs)
+    return;
+  *reqs = (struct nanorq_core_mem_reqs){0};
+  nanorq_core rq = {0};
+  if (!nanorq_core_encoder_new(K, overhead, &rq) || stride == 0)
+    return;
   reqs->prepare_bytes = nanorq_core_calculate_prepare_memory(&rq);
   reqs->work_bytes = nanorq_core_calculate_work_memory(&rq);
-  reqs->matrix_bytes = nanorq_core_get_pc_rows(&rq) * stride;
+  size_t rows = nanorq_core_get_pc_rows(&rq);
+  if (rows > SIZE_MAX / stride) {
+    *reqs = (struct nanorq_core_mem_reqs){0};
+    return;
+  }
+  reqs->matrix_bytes = rows * stride;
   reqs->schedule_bytes = ops_estimate_schedule_bytes(K);
 }
 
@@ -132,19 +154,31 @@ void nanorq_core_get_memory_reqs(uint32_t K, uint32_t overhead, uint32_t stride,
 
 bool nanorq_core_encode_simple(uint8_t *src_data, uint32_t K, uint16_t T,
                                uint32_t num_repair, uint8_t *repair_out) {
-  nanorq_core rq;
-  nanorq_core_encoder_new(K, 0, &rq);
+  if (!src_data || !repair_out || T == 0)
+    return false;
+  nanorq_core rq = {0};
+  if (!nanorq_core_encoder_new(K, 0, &rq))
+    return false;
 
   struct nanorq_core_mem_reqs reqs;
   nanorq_core_get_memory_reqs(K, 0, T, &reqs);
+  if (!reqs.prepare_bytes || !reqs.work_bytes || !reqs.matrix_bytes ||
+      !reqs.schedule_bytes)
+    return false;
 
   uint8_t *prep_mem = (uint8_t *)malloc(reqs.prepare_bytes);
+  if (!prep_mem)
+    return false;
   if (!nanorq_core_prepare(&rq, prep_mem, reqs.prepare_bytes)) {
     free(prep_mem);
     return false;
   }
 
   uint8_t *D = (uint8_t *)calloc(1, reqs.matrix_bytes);
+  if (!D) {
+    free(prep_mem);
+    return false;
+  }
   uint32_t SH = nanorq_core_get_pc_genc_offset(&rq);
 
   for (uint32_t i = 0; i < K; i++) {
@@ -153,12 +187,19 @@ bool nanorq_core_encode_simple(uint8_t *src_data, uint32_t K, uint16_t T,
 
   uint8_t *work_mem = (uint8_t *)malloc(reqs.work_bytes);
   schedule S_enc = {0};
-  S_enc.ops.a = (sched_op *)malloc(reqs.schedule_bytes);
-  S_enc.ops.m = reqs.schedule_bytes / sizeof(sched_op);
+  void *sched_mem = malloc(reqs.schedule_bytes);
+  if (!work_mem || !schedule_init(&S_enc, sched_mem, reqs.schedule_bytes)) {
+    free(prep_mem);
+    free(D);
+    free(work_mem);
+    free(sched_mem);
+    return false;
+  }
 
   nanorq_core_set_op_callback(&rq, &S_enc, ops_push);
 
-  if (!nanorq_core_precalculate(&rq, work_mem, reqs.work_bytes)) {
+  if (!nanorq_core_precalculate(&rq, work_mem, reqs.work_bytes) ||
+      S_enc.overflowed || S_enc.cpidx != 2) {
     free(prep_mem);
     free(D);
     free(work_mem);
